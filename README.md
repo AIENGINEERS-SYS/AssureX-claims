@@ -28,3 +28,7 @@ pip install -r requirements.txt
 ```
 
 Add dependencies to `requirements.txt` as implementation progresses.
+
+## Phase 2: Database
+
+The core relational schema is in `backend/db/models.py`, its first Alembic migration is in `backend/db/migrations/versions/`, and isolated migration/relationship tests are in `tests/test_database.py`. PostgreSQL is the production target; SQLite is the local/test fallback. See [database setup and architecture](documentation/database.md) for environment variables, migration and seed commands, relationships and limitations.
