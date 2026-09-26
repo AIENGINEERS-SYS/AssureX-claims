@@ -1,7 +1,5 @@
 """Opt-in development fixtures; passwords are supplied through the environment."""
-import hashlib
 import os
-import secrets
 from datetime import date, timedelta
 from decimal import Decimal
 from sqlalchemy import select
@@ -10,9 +8,9 @@ from backend.db.session import session_factory
 
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_bytes(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 600_000)
-    return f"pbkdf2_sha256$600000${salt.hex()}${digest.hex()}"
+    user = User()
+    user.set_password(password)
+    return user.password_hash
 
 
 def main() -> None:
@@ -26,7 +24,7 @@ def main() -> None:
         if session.scalar(select(User.id).limit(1)) is not None:
             raise SystemExit("Seed only an empty development database")
         admin = User(email="admin@example.invalid", password_hash=hash_password(admin_password),
-                     first_name="Demo", last_name="Admin", role="administrator")
+                     first_name="Demo", last_name="Admin", role="admin")
         customer = User(email="customer@example.invalid", password_hash=hash_password(customer_password),
                         first_name="Demo", last_name="Customer")
         session.add_all((admin, customer))
