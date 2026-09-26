@@ -112,6 +112,9 @@ export default function Wizard() {
       if (step === 3 && requiredDocuments.some(type => !current.current.documents.some(d => d.document_type === type))) {
         setError('Upload the receipt, product image, serial number image and damage evidence before continuing.'); return;
       }
+      if (step === 3 && current.current.documents.some(document => document.review_status === 'pending')) {
+        setError('Review and confirm the extracted information before continuing.'); return;
+      }
     }
     await run(async () => {
       await persist(form.getValues(), next);
@@ -125,24 +128,40 @@ export default function Wizard() {
     });
   }
   async function upload(type, file) {
+    const policy = current.current.document_policy || {max_document_size_mb: 10, max_claim_upload_size_mb: 50, max_documents_per_claim: 20};
     if (!/\.(jpe?g|png|pdf)$/i.test(file.name) || !['image/jpeg', 'image/png', 'application/pdf'].includes(file.type)) {setError('Choose a JPG, JPEG, PNG or PDF file.'); return;}
-    if (file.size > 10 * 1024 * 1024) {setError('Each file must be at most 10 MB.'); return;}
-    if (current.current.documents.reduce((sum, doc) => sum + doc.file_size, file.size) > 50 * 1024 * 1024) {setError('Total uploads cannot exceed 50 MB.'); return;}
+    if (file.size > policy.max_document_size_mb * 1024 * 1024) {setError(`Each file must be at most ${policy.max_document_size_mb} MB.`); return;}
+    if (current.current.documents.length >= policy.max_documents_per_claim) {setError(`A claim can contain at most ${policy.max_documents_per_claim} documents.`); return;}
+    if (current.current.documents.reduce((sum, doc) => sum + doc.file_size, file.size) > policy.max_claim_upload_size_mb * 1024 * 1024) {setError(`Total uploads cannot exceed ${policy.max_claim_upload_size_mb} MB.`); return;}
     await run(async () => {
       await persist(form.getValues(), step);
       const data = new FormData();
-      data.append('draft_id', current.current.id); data.append('version', current.current.version);
+      data.append('version', current.current.version);
       data.append('document_type', type); data.append('file', file); setProgress({type, percent: 0});
       try {
-        const response = await api.post('/claims/upload', data, {onUploadProgress: event => setProgress({type, percent: Math.round(event.loaded / (event.total || file.size) * 100)})});
+        const response = await api.post(`/claims/${current.current.id}/documents`, data, {onUploadProgress: event => setProgress({type, percent: Math.round(event.loaded / (event.total || file.size) * 100)})});
         accept(response.data.claim); setStatus('All changes saved');
       } finally {setProgress(null);}
     });
   }
   function remove(documentId) {
     run(async () => {
-      const response = await api.delete(`/claims/draft/${current.current.id}/documents/${documentId}`, {data: {draft_id: current.current.id, version: current.current.version}});
+      const response = await api.delete(`/documents/${documentId}`, {data: {version: current.current.version}});
       accept(response.data.claim);
+    });
+  }
+  function review(documentId, corrections) {
+    run(async () => {
+      const clean = Object.fromEntries(Object.entries(corrections).map(([key, value]) => [key, value === '' ? null : value]));
+      if (clean.warranty_duration !== null) clean.warranty_duration = Number(clean.warranty_duration);
+      const response = await api.patch(`/documents/${documentId}/ocr-review`, {...clean, confirm: true, version: current.current.version});
+      accept(response.data.claim); setStatus('Extracted information confirmed');
+    });
+  }
+  function retry(documentId) {
+    run(async () => {
+      const response = await api.post(`/documents/${documentId}/ocr/retry`, {version: current.current.version});
+      accept(response.data.claim); setStatus('Document analysis updated');
     });
   }
   function submit() {
@@ -160,7 +179,8 @@ export default function Wizard() {
       <form onSubmit={event => event.preventDefault()}><fieldset disabled={busy || blocked.current}>
         {step === 1 && <ProductStep products={products} register={form.register} errors={form.formState.errors} selected={selected}/>}
         {step === 2 && <DetailsStep register={form.register} errors={form.formState.errors} today={claim.server_date} description={values.description}/>}
-        {step === 3 && <DocumentsStep documents={claim.documents} upload={upload} remove={remove} progress={progress} busy={busy}/>}
+        {step === 3 && <DocumentsStep documents={claim.documents} upload={upload} remove={remove} review={review} retry={retry}
+          progress={progress} busy={busy} policy={claim.document_policy}/>}
         {step === 4 && <ReviewStep claim={claim} product={selected} values={values}/>}
       </fieldset><div className="actions"><button type="button" disabled={busy} onClick={() => run(async () => {await persist(form.getValues(), step); navigate('/');})}>Save and exit</button>
         <div>{step > 1 && <button type="button" disabled={busy || blocked.current} onClick={() => go(step - 1)}>Previous</button>}

@@ -1,8 +1,9 @@
 """Example claim workflows with ownership, assignment and state checks."""
-from flask import Blueprint, request, send_file
+from flask import Blueprint, current_app, request, send_file
 from flask_jwt_extended import current_user
 from sqlalchemy import select, update
-from werkzeug.exceptions import BadRequest, Conflict, NotFound, RequestEntityTooLarge
+from sqlalchemy.exc import IntegrityError
+from werkzeug.exceptions import BadRequest, Conflict, NotFound
 from backend.db.models import Claim, Document, User
 from backend.extensions import db
 from backend.security import role_required
@@ -79,34 +80,91 @@ def status(claim_id):
 
 
 @bp.post("/<int:claim_id>/documents")
-@role_required("employee")
+@role_required("customer", "employee")
 def upload(claim_id):
-    from backend.services.claim_storage import TOTAL_LIMIT, storage, storage_key, validate_file
+    if current_user.role == "customer":
+        from .claim_schemas import ClaimUploadSchema
+        from .documents import upload_to_claim
+        from backend.services.claim_submission import owned_claim, workflow_json
+        from backend.services.document_service import document_json
+        data = ClaimUploadSchema().load(request.form.to_dict())
+        if len(request.files.getlist("file")) != 1 or set(request.files) != {"file"}:
+            from backend.services.document_errors import document_error
+            raise document_error("unsupported_document", "Upload exactly one document per request.")
+        claim = owned_claim(claim_id)
+        document = upload_to_claim(claim, data, request.files["file"])
+        return {"document": document_json(document, include_text=True), "claim": workflow_json(claim)}, 201
+    from backend.services.claim_storage import storage, storage_key, total_limit, validate_file
+    from backend.services.document_errors import DocumentError, document_error
+    from backend.services.document_service import (document_json, duplicate_on_other_claim,
+        process_document, stored_document_type)
+    from .claim_schemas import DOCUMENT_TYPES
     claim = assigned_claim(claim_id, lock=True)
-    db.session.execute(update(Claim).where(Claim.id == claim.id).values(version=Claim.version + 1))
-    db.session.refresh(claim)
     if claim.status in {"approved", "rejected", "closed"}:
         raise Conflict("Documents cannot be added to a finalized claim.")
-    content, name, mime, suffix, digest = validate_file(request.files.get("file"))
-    if sum(d.file_size for d in claim.documents) + len(content) > TOTAL_LIMIT:
-        raise RequestEntityTooLarge("Total upload size cannot exceed 50 MB.")
+    if len(request.files.getlist("file")) != 1 or set(request.files) != {"file"}:
+        raise document_error("unsupported_document", "Upload exactly one document per request.")
+    kind = request.form.get("document_type", "other")
+    if kind not in DOCUMENT_TYPES:
+        raise document_error("unsupported_document", "Select a supported document type.")
+    try:
+        content, name, mime, suffix, digest = validate_file(request.files["file"])
+    except DocumentError as exc:
+        audit("document_rejected", claim, new={"reason": exc.error_code}, claim_id=claim.id)
+        db.session.commit()
+        raise
+    if db.session.scalar(select(Document.id).where(Document.claim_id == claim.id,
+            Document.file_hash == digest).limit(1)) is not None:
+        audit("duplicate_detected", claim, new={"scope": "same_claim"}, claim_id=claim.id)
+        db.session.commit()
+        raise document_error("duplicate_document", "This document has already been uploaded to this claim.", 409)
+    if len(claim.documents) >= current_app.config["MAX_DOCUMENTS_PER_CLAIM"]:
+        audit("document_rejected", claim, new={"reason": "document_limit_reached"}, claim_id=claim.id)
+        db.session.commit()
+        raise document_error("document_limit_reached",
+            f"A claim can contain at most {current_app.config['MAX_DOCUMENTS_PER_CLAIM']} documents.", 413)
+    if sum(d.file_size for d in claim.documents) + len(content) > total_limit():
+        audit("document_rejected", claim, new={"reason": "claim_upload_too_large"}, claim_id=claim.id)
+        db.session.commit()
+        raise document_error("claim_upload_too_large",
+            f"Total claim uploads cannot exceed {current_app.config['MAX_CLAIM_UPLOAD_SIZE_MB']} MB.", 413)
+    db.session.execute(update(Claim).where(Claim.id == claim.id).values(version=Claim.version + 1))
+    db.session.refresh(claim)
     key = storage_key(claim.id, suffix)
     store = storage()
-    document = Document(claim_id=claim.id, uploaded_by=current_user.id, document_type="other",
+    document = Document(claim_id=claim.id, uploaded_by=current_user.id, document_type=stored_document_type(kind),
         original_filename=name, stored_filename=key.rsplit("/", 1)[-1], mime_type=mime, file_size=len(content),
-        storage_path=key, file_hash=digest)
+        storage_path=key, file_hash=digest, cross_claim_duplicate=duplicate_on_other_claim(digest, claim.id))
     try:
-        store.put(key, content, mime)
+        store.save(key, content, mime)
         db.session.add(document)
         db.session.flush()
-        audit("document.upload", document, claim_id=claim.id)
+        audit("document_uploaded", document, claim_id=claim.id)
         db.session.commit()
-    except Exception:
+    except IntegrityError:
         db.session.rollback()
         store.delete(key)
+        if db.session.scalar(select(Document.id).where(Document.claim_id == claim.id,
+                Document.file_hash == digest).limit(1)) is not None:
+            audit("duplicate_detected", claim, new={"scope": "same_claim_race"}, claim_id=claim.id)
+            db.session.commit()
+            raise document_error("duplicate_document", "This document has already been uploaded to this claim.", 409)
         raise
-    return {"document": {"id": document.id, "filename": document.original_filename,
-                         "size": document.file_size}}, 201
+    except Exception as exc:
+        db.session.rollback()
+        store.delete(key)
+        current_app.logger.error("Document storage failed claim_id=%s error=%s", claim.id, type(exc).__name__)
+        claim = db.session.get(Claim, claim.id)
+        audit("document_rejected", claim, new={"reason": "storage_failure"}, claim_id=claim.id)
+        db.session.commit()
+        raise document_error("storage_failure", "The document could not be stored. Please retry.", 503) from None
+    audit("ocr_started", document, claim_id=claim.id)
+    action = process_document(document, content)
+    audit(action, document, new={"status": document.ocr_status,
+        "duration_ms": document.processing_duration_ms}, claim_id=claim.id)
+    db.session.commit()
+    return {"document": document_json(document, include_text=True, include_fraud=True) |
+            {"filename": document.original_filename, "size": document.file_size}}, 201
 
 
 @bp.get("/<int:claim_id>/documents/<int:document_id>")

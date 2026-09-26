@@ -1,5 +1,7 @@
 # Phase 5: Claim submission
 
+Phase 6 extends this workflow with OCR, duplicate detection and user-confirmed extraction. See [`documents.md`](documents.md) for the current upload limits, document APIs and review rules.
+
 Open `/claims` after installing dependencies, building the frontend and upgrading the database. Customers can select a product, describe the fault, upload evidence, review and submit. The server returns a permanent identifier such as `CLM-2026-000001`.
 
 ## Setup

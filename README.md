@@ -48,3 +48,7 @@ Run `python -m flask --app backend:create_app db upgrade` before starting the ap
 ## Phase 5: Claim submission
 
 Open `/claims` for the React four-step claim wizard, automatic draft saving, private supporting-document uploads, review and sequential Claim IDs. Install Python requirements, run `npm --prefix frontend ci` and `npm --prefix frontend run build`, then upgrade the database before starting Flask. See [claim workflow setup, architecture, API examples and testing](documentation/claims.md).
+
+## Phase 6: Document upload and OCR
+
+Claim evidence now passes signature/corruption checks, SHA-256 duplicate detection, private storage, provider-neutral OCR, structured Nigerian receipt/warranty extraction and explicit user confirmation. Machine values and user corrections remain separate for audit, fraud and rule-engine use. See [document processing setup, security model and API](documentation/documents.md), including the required Tesseract system installation.

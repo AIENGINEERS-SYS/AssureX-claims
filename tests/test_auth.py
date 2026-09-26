@@ -20,7 +20,8 @@ def app(tmp_path, monkeypatch):
     command.upgrade(Config("backend/db/alembic.ini"), "head")
     app = create_app({"TESTING": True, "ASSUREX_ENV": "development", "JWT_SECRET_KEY": "test-key-" * 8,
         "SQLALCHEMY_DATABASE_URI": url, "BCRYPT_LOG_ROUNDS": 4, "RATELIMIT_ENABLED": False,
-        "UPLOAD_FOLDER": str(tmp_path / "uploads")})
+        "UPLOAD_FOLDER": str(tmp_path / "uploads"), "DOCUMENT_STORAGE_PATH": str(tmp_path / "uploads"),
+        "OCR_PROVIDER": "disabled"})
     yield app
     with app.app_context():
         db.session.remove()
@@ -167,7 +168,6 @@ def test_reject_bad_signature_issuer_and_audience(client, app, accounts):
     ("post", "/api/admin/users"), ("patch", "/api/admin/users/1"),
     ("delete", "/api/admin/users/1"), ("patch", "/api/claims/1/assignment"),
     ("post", "/api/review/1/approve"), ("post", "/api/review/1/reject"),
-    ("post", "/api/claims/1/documents"),
 ])
 def test_mutation_authorization_precedes_body_validation(client, accounts, method, path):
     request = getattr(client, method)

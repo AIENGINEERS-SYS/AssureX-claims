@@ -167,6 +167,12 @@ class Document(Timestamps, Base):
         CheckConstraint("file_size >= 0", name="ck_documents_size"),
         CheckConstraint("(claim_id IS NOT NULL) OR (product_id IS NOT NULL) OR (warranty_id IS NOT NULL)", name="ck_documents_parent"),
         CheckConstraint("document_type IN ('receipt','invoice','warranty_card','product_image','serial_number_image','fault_evidence','diagnostic_report','repair_report','other')", name="ck_documents_type"),
+        CheckConstraint("upload_status IN ('stored')", name="ck_documents_upload_status"),
+        CheckConstraint("ocr_status IN ('pending','processing','completed','completed_with_warnings','failed','review_required')", name="ck_documents_ocr_status"),
+        CheckConstraint("review_status IN ('pending','confirmed','not_required')", name="ck_documents_review_status"),
+        CheckConstraint("processing_duration_ms IS NULL OR processing_duration_ms >= 0", name="ck_documents_processing_duration"),
+        CheckConstraint("ocr_confidence IS NULL OR (ocr_confidence >= 0 AND ocr_confidence <= 1)", name="ck_documents_ocr_confidence"),
+        UniqueConstraint("claim_id", "file_hash", name="uq_documents_claim_hash"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     document_id: Mapped[str] = mapped_column(String(32), default=pid("DOC"), unique=True, nullable=False)
@@ -180,12 +186,24 @@ class Document(Timestamps, Base):
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
     storage_path: Mapped[str] = mapped_column(Text, nullable=False)
     file_hash: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    upload_status: Mapped[str] = mapped_column(String(30), default="stored", nullable=False)
     ocr_status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False)
+    ocr_error: Mapped[str | None] = mapped_column(Text)
     ocr_text: Mapped[str | None] = mapped_column(Text)
     extracted_data: Mapped[dict | None] = mapped_column(JSON)
     verified_data: Mapped[dict | None] = mapped_column(JSON)
+    ocr_confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
+    ocr_provider: Mapped[str | None] = mapped_column(String(80))
+    ocr_provider_version: Mapped[str | None] = mapped_column(String(80))
+    ocr_processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    processing_duration_ms: Mapped[int | None] = mapped_column(Integer)
+    review_status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    cross_claim_duplicate: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     claim: Mapped[Claim | None] = relationship(back_populates="documents")
+    reviewer: Mapped[User | None] = relationship(foreign_keys=[reviewed_by])
     file_name = synonym("original_filename")
     file_path = synonym("storage_path")
     file_type = synonym("mime_type")

@@ -13,9 +13,9 @@ from backend.services.claim_submission import next_claim_id
 from test_auth import app, client, accounts, claims, login, bearer
 
 
-def png():
+def png(color="blue"):
     stream = BytesIO()
-    Image.new("RGB", (8, 8), "blue").save(stream, format="PNG")
+    Image.new("RGB", (8, 8), color).save(stream, format="PNG")
     return stream.getvalue()
 
 
@@ -51,8 +51,9 @@ def complete(client, headers, product_id):
     claim = draft(client, headers, product_id, fault_date=date.today().isoformat(),
         fault_type="Electrical Failure", description="The screen no longer turns on when connected to power.",
         damage_category="Moderate", repair_history="No earlier repairs", previous_replacement=False, current_step=3)
-    for kind in ("receipt", "product_image", "serial_number_image", "damage_evidence"):
-        result = upload(client, headers, claim, kind)
+    for kind, color in zip(("receipt", "product_image", "serial_number_image", "damage_evidence"),
+                           ("blue", "red", "green", "yellow")):
+        result = upload(client, headers, claim, kind, content=png(color))
         assert result.status_code == 201, result.json
         claim = result.json["claim"]
     return claim
@@ -169,11 +170,13 @@ def test_size_limits_exact_boundary_and_total(client, headers, claims):
     small = png()
     exact = small + b"\0" * (10 * 1024 * 1024 - len(small))
     assert upload(client, headers, claim, content=exact + b"x").status_code == 413
-    for _ in range(5):
+    for index, color in enumerate(("blue", "red", "green", "yellow", "purple")):
+        image = png(color)
+        exact = image + bytes([index]) * (10 * 1024 * 1024 - len(image))
         response = upload(client, headers, claim, content=exact)
         assert response.status_code == 201, response.json
         claim = response.json["claim"]
-    assert upload(client, headers, claim).status_code == 413
+    assert upload(client, headers, claim, content=png("orange")).status_code == 413
 
 
 def test_revalidate_product_and_stored_files(client, app, headers, claims):
@@ -226,7 +229,8 @@ def test_failed_storage_does_not_commit_metadata(client, app, headers, claims, m
     def fail(*args):
         raise OSError("Storage unavailable")
     monkeypatch.setattr(LocalStorage, "put", fail)
-    assert upload(client, headers, claim).status_code == 500
+    response = upload(client, headers, claim)
+    assert response.status_code == 503 and response.json["error"]["code"] == "storage_failure"
     result = client.get(f"/api/claims/{claim['id']}", headers=headers).json["claim"]
     assert result["version"] == claim["version"] and result["documents"] == []
 
@@ -262,7 +266,7 @@ def test_s3_adapter_uses_private_objects_and_preserves_keys(app, monkeypatch):
             objects.pop(kwargs["Key"])
     monkeypatch.setitem(sys.modules, "boto3", SimpleNamespace(client=lambda *args, **kwargs: FakeS3()))
     monkeypatch.setitem(sys.modules, "botocore.exceptions", SimpleNamespace(ClientError=RuntimeError))
-    app.config.update(CLAIM_STORAGE="s3", S3_BUCKET="private-claims")
+    app.config.update(DOCUMENT_STORAGE_BACKEND="s3", S3_BUCKET="private-claims")
     with app.app_context():
         store = storage()
         store.put("claims/1/key.png", png(), "image/png")

@@ -5,10 +5,10 @@ from flask_jwt_extended import current_user
 from marshmallow import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from werkzeug.exceptions import BadRequest, NotFound, RequestEntityTooLarge
-from backend.db.models import Claim, Document, Product, utcnow
+from werkzeug.exceptions import BadRequest, NotFound
+from backend.db.models import Claim, Product, utcnow
 from backend.extensions import db
-from backend.services.claim_storage import TOTAL_LIMIT, storage, storage_key, validate_file
+from backend.services.claim_storage import storage
 from backend.services.claim_submission import (apply_draft, customer_only, document_json, lock_draft,
     next_claim_id, owned_claim, validation_errors, workflow_json)
 from backend.services.products import product_json
@@ -58,30 +58,11 @@ def update(draft_id):
 def upload():
     data = UploadSchema().load(request.form.to_dict())
     if len(request.files.getlist("file")) != 1 or set(request.files) != {"file"}:
-        raise BadRequest("Upload exactly one file per request.")
+        from backend.services.document_errors import document_error
+        raise document_error("unsupported_document", "Upload exactly one document per request.")
     claim = owned_claim(data["draft_id"])
-    content, name, mime, suffix, digest = validate_file(request.files.get("file"))
-    lock_draft(claim, data["version"])
-    if not claim.product_id:
-        raise ValidationError({"product_id": ["Select a product before uploading documents."]})
-    if sum(d.file_size for d in claim.documents) + len(content) > TOTAL_LIMIT:
-        raise RequestEntityTooLarge("Total upload size cannot exceed 50 MB.")
-    key = storage_key(claim.id, suffix)
-    document = Document(claim=claim, uploaded_by=current_user.id,
-        document_type="fault_evidence" if data["document_type"] == "damage_evidence" else data["document_type"],
-        original_filename=name, stored_filename=key.rsplit("/", 1)[-1], mime_type=mime,
-        file_size=len(content), storage_path=key, file_hash=digest)
-    store = storage()
-    try:
-        store.put(key, content, mime)
-        db.session.add(document)
-        db.session.flush()
-        audit("claim.document.upload", document, claim_id=claim.id)
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        store.delete(key)
-        raise
+    from .documents import upload_to_claim
+    document = upload_to_claim(claim, data, request.files["file"])
     return {"document": document_json(document), "claim": workflow_json(claim)}, 201
 
 
@@ -97,7 +78,7 @@ def remove_document(draft_id, document_id):
     if document is None:
         raise NotFound("Document not found.")
     key = document.storage_path
-    audit("claim.document.remove", document, claim_id=claim.id)
+    audit("document_deleted", document, claim_id=claim.id)
     db.session.delete(document)
     db.session.commit()
     # After commit, a storage failure may leave an inaccessible orphan, never a broken live reference.
@@ -125,6 +106,8 @@ def submit():
     now = utcnow()
     claim.claim_id = next_claim_id(now.year)
     claim.status, claim.submitted_at, claim.submission_date = "submitted", now, now.date()
+    claim.manual_review_required = any(document.ocr_status in {"failed", "review_required", "completed_with_warnings"}
+        or document.cross_claim_duplicate for document in claim.documents)
     claim.current_step = 4
     audit("claim.submit", claim, new={"claim_id": claim.claim_id, "status": "SUBMITTED"}, claim_id=claim.id)
     db.session.commit()

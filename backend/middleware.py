@@ -24,8 +24,11 @@ def init_middleware(app):
     def http_error(exc):
         db.session.rollback()
         response = exc.get_response()
+        default_code = "file_too_large" if exc.code == 413 else exc.name.lower().replace(" ", "_")
         response.data = app.json.dumps({"error": {
-            "code": exc.name.lower().replace(" ", "_"), "message": exc.description}})
+            "code": getattr(exc, "error_code", default_code),
+            "message": exc.description,
+            **({"details": exc.details} if getattr(exc, "details", None) else {})}})
         response.content_type = "application/json"
         return response
 
@@ -51,7 +54,7 @@ def init_middleware(app):
         if request.blueprint == "web":
             response.headers["Content-Security-Policy"] = (
                 "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
-                "img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+                "img-src 'self' blob:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
         response.headers["Referrer-Policy"] = "same-origin"
         if app.config["ASSUREX_ENV"] == "production":
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"

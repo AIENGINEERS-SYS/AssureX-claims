@@ -2,6 +2,7 @@
 import hashlib
 from datetime import timezone
 from functools import wraps
+from flask import current_app
 from flask_jwt_extended import current_user
 from marshmallow import ValidationError
 from sqlalchemy import select, update
@@ -11,7 +12,8 @@ from backend.api.claim_schemas import DraftSchema, REQUIRED_DOCUMENTS
 from backend.db.models import Claim, ClaimSequence, Product, utcnow
 from backend.extensions import db
 from backend.security import role_required
-from .claim_storage import FILE_LIMIT, TOTAL_LIMIT, storage
+from .claim_storage import file_limit, storage, total_limit
+from .document_service import completeness, document_json
 from .products import product_json
 from .warranty_calculations import current_date, select_current_warranty
 
@@ -83,15 +85,21 @@ def validation_errors(claim, *, verify_files=False):
             selected_product(claim.product_id)
         except ValidationError as exc:
             errors.update(exc.messages)
-    types = {"damage_evidence" if d.document_type == "fault_evidence" else d.document_type for d in claim.documents}
-    missing = set(REQUIRED_DOCUMENTS) - types
-    if missing:
-        errors["documents"] = ["Upload: " + ", ".join(sorted(missing)) + "."]
-    if sum(d.file_size for d in claim.documents) > TOTAL_LIMIT:
+    document_state = completeness(claim, REQUIRED_DOCUMENTS)
+    if document_state["missing"]:
+        errors["documents"] = ["Upload: " + ", ".join(sorted(document_state["missing"])) + "."]
+    if sum(d.file_size for d in claim.documents) > total_limit():
         errors["documents"] = ["Total upload size cannot exceed 50 MB."]
+    if len(claim.documents) > current_app.config["MAX_DOCUMENTS_PER_CLAIM"]:
+        errors.setdefault("documents", []).append("Too many documents are attached to this claim.")
     for document in claim.documents:
-        if document.file_size > FILE_LIMIT:
+        if document.file_size > file_limit():
             errors.setdefault("documents", []).append("A file exceeds 10 MB.")
+        if document.ocr_status in {"pending", "processing"}:
+            errors.setdefault("documents", []).append("Document processing is still in progress.")
+        if document.review_status == "pending":
+            errors.setdefault("documents", []).append(
+                f"Review the extracted information for {document.original_filename}.")
         if verify_files:
             try:
                 content = storage().read(document.storage_path)
@@ -116,12 +124,6 @@ def next_claim_id(year):
     return f"CLM-{year}-{db.session.scalar(statement):06d}"
 
 
-def document_json(document):
-    return {"id": document.id, "document_type": "damage_evidence" if document.document_type == "fault_evidence" else document.document_type,
-        "file_name": document.original_filename, "file_type": document.mime_type, "file_size": document.file_size,
-        "uploaded_at": timestamp(document.created_at), "uploaded_by": document.uploaded_by}
-
-
 def timestamp(value):
     # SQLite drops timezone information; all stored application timestamps are UTC.
     return value.replace(tzinfo=timezone.utc).isoformat() if value else None
@@ -139,4 +141,9 @@ def workflow_json(claim):
         "created_at": timestamp(claim.created_at), "updated_at": timestamp(claim.updated_at),
         "server_date": current_date().isoformat(),
         "product": product_json(claim.product, current_date()) if claim.product else None,
-        "documents": [document_json(d) for d in claim.documents]}
+        "documents": [document_json(d) for d in claim.documents],
+        "document_completeness": completeness(claim, REQUIRED_DOCUMENTS),
+        "document_policy": {"allowed_extensions": ["pdf", "jpg", "jpeg", "png"],
+            "max_document_size_mb": current_app.config["MAX_DOCUMENT_SIZE_MB"],
+            "max_documents_per_claim": current_app.config["MAX_DOCUMENTS_PER_CLAIM"],
+            "max_claim_upload_size_mb": current_app.config["MAX_CLAIM_UPLOAD_SIZE_MB"]}}

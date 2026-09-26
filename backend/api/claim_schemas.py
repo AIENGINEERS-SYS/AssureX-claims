@@ -7,9 +7,9 @@ from .schemas import StrictSchema
 FAULT_TYPES = ("Mechanical Failure", "Electrical Failure", "Software Issue", "Manufacturing Defect",
                "Accidental Damage", "Water Damage", "Overheating", "Other")
 DAMAGE_CATEGORIES = ("Minor", "Moderate", "Severe", "Total Loss")
-DOCUMENT_TYPES = ("receipt", "product_image", "serial_number_image", "damage_evidence",
-                  "warranty_card", "diagnostic_report", "repair_report")
-REQUIRED_DOCUMENTS = DOCUMENT_TYPES[:4]
+DOCUMENT_TYPES = ("receipt", "invoice", "product_image", "serial_number_image", "damage_evidence",
+                  "fault_evidence", "warranty_card", "diagnostic_report", "repair_report", "other")
+REQUIRED_DOCUMENTS = ("receipt", "product_image", "serial_number_image", "damage_evidence")
 
 
 def past_date(value):
@@ -53,3 +53,37 @@ class UploadSchema(StrictSchema):
     draft_id = fields.Integer(required=True, validate=validate.Range(min=1))
     version = fields.Integer(required=True, validate=validate.Range(min=1))
     document_type = fields.String(required=True, validate=validate.OneOf(DOCUMENT_TYPES))
+
+
+class ClaimUploadSchema(StrictSchema):
+    version = fields.Integer(required=True, validate=validate.Range(min=1))
+    document_type = fields.String(required=True, validate=validate.OneOf(DOCUMENT_TYPES))
+
+
+class DocumentMutationSchema(StrictSchema):
+    version = fields.Integer(required=True, strict=True, validate=validate.Range(min=1))
+
+
+class OCRReviewSchema(DocumentMutationSchema):
+    confirm = fields.Boolean(required=True, truthy={True}, falsy={False}, validate=validate.Equal(True))
+    purchase_date = fields.Date(allow_none=True, validate=past_date)
+    invoice_number = fields.String(allow_none=True, validate=validate.Length(max=100))
+    product_name = fields.String(allow_none=True, validate=validate.Length(max=200))
+    model_number = fields.String(allow_none=True, validate=validate.Length(max=100))
+    serial_number = fields.String(allow_none=True, validate=validate.Length(max=150))
+    retailer = fields.String(allow_none=True, validate=validate.Length(max=200))
+    purchase_price = fields.Decimal(allow_none=True, as_string=True, places=2,
+                                    validate=validate.Range(min=0, max=9999999999.99))
+    warranty_duration = fields.Integer(allow_none=True, strict=True, validate=validate.Range(min=1, max=1200))
+    warranty_duration_unit = fields.String(allow_none=True, validate=validate.OneOf(("months", "years")))
+
+    @pre_load
+    def clean_review(self, data, **kwargs):
+        if not isinstance(data, dict):
+            return data
+        result = dict(data)
+        for key in ("invoice_number", "product_name", "model_number", "serial_number", "retailer"):
+            if isinstance(result.get(key), str):
+                result[key] = "".join(c for c in unicodedata.normalize("NFC", result[key])
+                    if c in "\n\t" or not unicodedata.category(c).startswith("C")).strip() or None
+        return result
