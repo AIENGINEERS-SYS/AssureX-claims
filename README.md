@@ -44,3 +44,7 @@ Start with [setup and component explanations](documentation/authentication.md), 
 Open `/products` to register products, search/filter your portfolio, edit product details and manage original/extended warranties. Product age, expiry, remaining time and status are calculated on the server with UTC calendar dates. The responsive frontend uses Flask, HTML, CSS and JavaScript without a build step.
 
 Run `python -m flask --app backend:create_app db upgrade` before starting the app. See [Phase 4 setup, API and date rules](documentation/products.md) for migration details, serial uniqueness, authorization, warranty history and browser tests.
+
+## Phase 5: Claim submission
+
+Open `/claims` for the React four-step claim wizard, automatic draft saving, private supporting-document uploads, review and sequential Claim IDs. Install Python requirements, run `npm --prefix frontend ci` and `npm --prefix frontend run build`, then upgrade the database before starting Flask. See [claim workflow setup, architecture, API examples and testing](documentation/claims.md).

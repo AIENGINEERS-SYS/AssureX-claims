@@ -28,7 +28,7 @@ async function evaluate(expression) {
 async function wait(expression) {
   const deadline = Date.now()+12000;
   while(Date.now()<deadline) {if(await evaluate(expression)) return; await pause(100);}
-  throw new Error(`UI condition timed out: ${expression}\n${await evaluate("document.querySelector('#view').innerText")}`);
+  throw new Error(`UI condition timed out: ${expression}\n${await evaluate("document.querySelector('#view')?.innerText || document.body.innerText")}`);
 }
 const q = JSON.stringify;
 const has = (selector,text) => `document.querySelector(${q(selector)})?.textContent.includes(${q(text)})`;
@@ -38,7 +38,7 @@ async function click(selector) {
 }
 async function fill(selector,value) {
   await wait(`!!document.querySelector(${q(selector)})`);
-  await evaluate(`(() => {const el=document.querySelector(${q(selector)}); el.focus(); el.value=${q(value)}; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await evaluate(`(() => {const el=document.querySelector(${q(selector)}); el.focus(); Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el),'value').set.call(el,${q(value)}); el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
 }
 async function screenshot(name) {
   await mkdir(".pytest_cache",{recursive:true});
@@ -75,6 +75,10 @@ try {
   session = (await call("Target.attachToTarget",{targetId:target.targetId,flatten:true},null)).sessionId;
   await call("Page.enable"); await call("Runtime.enable"); await call("Log.enable");
   await call("Emulation.setDeviceMetricsOverride",{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+  if (scenario === "claims") {
+    const {runClaims} = await import('./browser_claims.mjs');
+    await runClaims({baseURL,call,click,fill,wait,has,evaluate,screenshot,pause});
+  } else {
   await call("Page.navigate",{url:baseURL+"/products"});
   await click('[data-action="login"]');
   await fill('#auth-form [name="email"]',"customer@example.com");
@@ -131,10 +135,11 @@ try {
     await wait(has("h1","Your products, protected."));
     assert.equal(await evaluate('document.querySelector("#product-form") === null'),true);
   }
+  }
   assert.deepEqual(errors,[],"No unhandled JavaScript or CSP errors");
   console.log(`Browser scenario passed: ${scenario}`);
 } catch(error) {
-  if(session) await screenshot("phase4-failure.png").catch(() => {});
+  if(session) await screenshot(`${scenario}-failure.png`).catch(() => {});
   console.error(error);
   process.exitCode = 1;
 } finally {

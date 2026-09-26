@@ -5,7 +5,7 @@ from sqlalchemy import (
     Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer,
     JSON, Numeric, String, Text, UniqueConstraint, event,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates, synonym
 from .base import Base
 from .ids import public_id
 
@@ -70,6 +70,7 @@ class Product(Timestamps, Base):
     __tablename__ = "products"
     __table_args__ = (CheckConstraint("purchase_price >= 0", name="ck_products_price"),)
     id: Mapped[int] = mapped_column(primary_key=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     product_id: Mapped[str] = mapped_column(String(32), default=pid("PRD"), unique=True, nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -122,6 +123,7 @@ def set_serial_identity(mapper, connection, product):
 class Claim(Timestamps, Base):
     __tablename__ = "claims"
     __table_args__ = (
+        CheckConstraint("current_step BETWEEN 1 AND 4", name="ck_claims_step"),
         CheckConstraint("status IN ('draft','submitted','under_evaluation','additional_information_required','manual_review','approved','rejected','closed')", name="ck_claims_status"),
         CheckConstraint("final_decision IS NULL OR final_decision IN ('likely_valid','likely_invalid','manual_review_required')", name="ck_claims_decision"),
     )
@@ -129,11 +131,19 @@ class Claim(Timestamps, Base):
     claim_id: Mapped[str] = mapped_column(String(32), default=pid("CLM"), unique=True, nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     assigned_employee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
-    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), index=True)
-    warranty_id: Mapped[int] = mapped_column(ForeignKey("warranties.id", ondelete="RESTRICT"), index=True)
-    fault_date: Mapped[date] = mapped_column(Date, nullable=False)
-    fault_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    fault_description: Mapped[str] = mapped_column(Text, nullable=False)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), index=True)
+    warranty_id: Mapped[int | None] = mapped_column(ForeignKey("warranties.id", ondelete="RESTRICT"), index=True)
+    fault_date: Mapped[date | None] = mapped_column(Date)
+    fault_type: Mapped[str | None] = mapped_column(String(100))
+    fault_description: Mapped[str | None] = mapped_column(Text)
+    repair_history: Mapped[str | None] = mapped_column(Text)
+    previous_replacement: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    current_step: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    customer_id = synonym("user_id")
+    description = synonym("fault_description")
+    damage_category = synonym("damage_type")
     damage_type: Mapped[str | None] = mapped_column(String(100))
     submission_date: Mapped[date | None] = mapped_column(Date, index=True)
     status: Mapped[str] = mapped_column(String(40), default="draft", index=True, nullable=False)
@@ -176,6 +186,20 @@ class Document(Timestamps, Base):
     verified_data: Mapped[dict | None] = mapped_column(JSON)
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     claim: Mapped[Claim | None] = relationship(back_populates="documents")
+    file_name = synonym("original_filename")
+    file_path = synonym("storage_path")
+    file_type = synonym("mime_type")
+    uploaded_at = synonym("created_at")
+
+
+# Reuse the evidence table so employee/reviewer workflows see customer uploads.
+ClaimDocument = Document
+
+
+class ClaimSequence(Base):
+    __tablename__ = "claim_sequences"
+    year: Mapped[int] = mapped_column(primary_key=True)
+    value: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class RepairHistory(Timestamps, Base):

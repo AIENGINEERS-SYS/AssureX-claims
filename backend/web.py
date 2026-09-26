@@ -19,3 +19,9 @@ def home():
 @bp.get("/products/<int:product_id>/edit")
 def products(product_id=None):
     return render_template("products.html", server_date=current_date().isoformat())
+
+
+@bp.get("/claims")
+@bp.get("/claims/<path:route>")
+def claims(route=None):
+    return render_template("claims.html")

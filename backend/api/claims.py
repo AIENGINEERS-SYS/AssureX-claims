@@ -1,19 +1,13 @@
 """Example claim workflows with ownership, assignment and state checks."""
-import hashlib
-from datetime import date
-from pathlib import Path
-from uuid import uuid4
-from flask import Blueprint, current_app, request, send_file
+from flask import Blueprint, request, send_file
 from flask_jwt_extended import current_user
-from sqlalchemy import select
-from werkzeug.exceptions import BadRequest, Conflict, NotFound
-from werkzeug.utils import secure_filename
+from sqlalchemy import select, update
+from werkzeug.exceptions import BadRequest, Conflict, NotFound, RequestEntityTooLarge
 from backend.db.models import Claim, Document, User
-from backend.db.services import create_claim
 from backend.extensions import db
 from backend.security import role_required
 from .common import audit, page
-from .schemas import AssignmentSchema, ClaimSchema, StatusSchema, body, claim_json
+from .schemas import AssignmentSchema, StatusSchema, body, claim_json
 
 bp = Blueprint("claims", __name__, url_prefix="/api/claims")
 
@@ -30,26 +24,15 @@ def assigned_claim(claim_id, *, lock=False):
     return claim
 
 
-@bp.post("")
-@role_required("customer")
-def submit():
-    data = body(ClaimSchema())
-    if data["fault_date"] > date.today():
-        raise BadRequest("Fault date cannot be in the future.")
-    try:
-        claim = create_claim(db.session, user_id=current_user.id, **data)
-    except ValueError:
-        raise BadRequest("Product and warranty must belong to you and match each other.") from None
-    claim.status, claim.submission_date = "submitted", date.today()
-    audit("claim.create", claim, new={"status": claim.status}, claim_id=claim.id)
-    db.session.commit()
-    return {"claim": claim_json(claim)}, 201
-
-
 @bp.get("/my")
 @role_required("customer")
 def mine():
-    return page(select(Claim).where(Claim.user_id == current_user.id).order_by(Claim.id.desc()), claim_json)
+    from backend.services.claim_submission import workflow_json
+    from sqlalchemy.orm import selectinload
+    from backend.db.models import Product
+    return page(select(Claim).where(Claim.user_id == current_user.id).options(
+        selectinload(Claim.documents), selectinload(Claim.product).selectinload(Product.warranties)
+    ).order_by(Claim.id.desc()), lambda c: claim_json(c) | workflow_json(c))
 
 
 @bp.get("/assigned")
@@ -98,37 +81,29 @@ def status(claim_id):
 @bp.post("/<int:claim_id>/documents")
 @role_required("employee")
 def upload(claim_id):
+    from backend.services.claim_storage import TOTAL_LIMIT, storage, storage_key, validate_file
     claim = assigned_claim(claim_id, lock=True)
+    db.session.execute(update(Claim).where(Claim.id == claim.id).values(version=Claim.version + 1))
+    db.session.refresh(claim)
     if claim.status in {"approved", "rejected", "closed"}:
         raise Conflict("Documents cannot be added to a finalized claim.")
-    uploaded = request.files.get("file")
-    if uploaded is None or not uploaded.filename:
-        raise BadRequest("Supply a file in multipart/form-data.")
-    content = uploaded.read(current_app.config["MAX_CONTENT_LENGTH"] + 1)
-    kind = next(((extension, mime) for signature, extension, mime in (
-        (b"%PDF-", ".pdf", "application/pdf"),
-        (b"\x89PNG\r\n\x1a\n", ".png", "image/png"),
-        (b"\xff\xd8\xff", ".jpg", "image/jpeg")) if content.startswith(signature)), None)
-    if kind is None:
-        raise BadRequest("Only PDF, PNG and JPEG files are accepted.")
-    root = Path(current_app.config["UPLOAD_FOLDER"]).resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    filename = uuid4().hex + kind[0]
-    path = root / filename
+    content, name, mime, suffix, digest = validate_file(request.files.get("file"))
+    if sum(d.file_size for d in claim.documents) + len(content) > TOTAL_LIMIT:
+        raise RequestEntityTooLarge("Total upload size cannot exceed 50 MB.")
+    key = storage_key(claim.id, suffix)
+    store = storage()
     document = Document(claim_id=claim.id, uploaded_by=current_user.id, document_type="other",
-        original_filename=secure_filename(uploaded.filename)[:255] or filename,
-        stored_filename=filename, mime_type=kind[1], file_size=len(content),
-        storage_path=filename, file_hash=hashlib.sha256(content).hexdigest())
+        original_filename=name, stored_filename=key.rsplit("/", 1)[-1], mime_type=mime, file_size=len(content),
+        storage_path=key, file_hash=digest)
     try:
-        with path.open("xb") as stream:
-            stream.write(content)
+        store.put(key, content, mime)
         db.session.add(document)
         db.session.flush()
         audit("document.upload", document, claim_id=claim.id)
         db.session.commit()
     except Exception:
         db.session.rollback()
-        path.unlink(missing_ok=True)
+        store.delete(key)
         raise
     return {"document": {"id": document.id, "filename": document.original_filename,
                          "size": document.file_size}}, 201
@@ -149,9 +124,7 @@ def download(claim_id, document_id):
     document = db.session.scalar(select(Document).where(Document.id == document_id, Document.claim_id == claim_id))
     if document is None:
         raise NotFound("Document not found.")
-    root = Path(current_app.config["UPLOAD_FOLDER"]).resolve()
-    path = (root / document.storage_path).resolve()
-    if not path.is_relative_to(root) or not path.is_file():
-        raise NotFound("Document not found.")
-    return send_file(path, mimetype="application/octet-stream", as_attachment=True,
+    from io import BytesIO
+    from backend.services.claim_storage import storage
+    return send_file(BytesIO(storage().read(document.storage_path)), mimetype="application/octet-stream", as_attachment=True,
                      download_name=document.original_filename)

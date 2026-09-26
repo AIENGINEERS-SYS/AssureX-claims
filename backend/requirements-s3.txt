@@ -1,0 +1,2 @@
+# Optional production adapter; local development does not need the AWS SDK.
+boto3>=1.40,<2
