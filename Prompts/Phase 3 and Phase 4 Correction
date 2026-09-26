@@ -1,0 +1,363 @@
+You are a senior software architect, security engineer, QA engineer, and code reviewer.
+
+Audit the entire AssureX codebase and automatically identify, explain, and fix implementation issues related to:
+
+# Phase 3: Authentication and Role-Based Access Control
+
+Features that must exist:
+
+* User Registration
+* Login
+* Logout
+* Password Hashing
+* JWT Authentication
+* Refresh Tokens
+* Role-Based Access Control (RBAC)
+
+Roles:
+
+* Customer
+* Service Center Employee
+* Claim Reviewer
+* Administrator
+
+Expected permissions:
+
+Customer:
+
+* Create claims
+* View own claims
+
+Service Center Employee:
+
+* View assigned claims
+* Update claim status
+
+Claim Reviewer:
+
+* View manual-review claims
+* Approve claims
+* Reject claims
+
+Administrator:
+
+* Manage users
+* Manage policies
+* Access analytics
+* Manage AI models
+* Full system access
+
+---
+
+# Phase 4: Product and Warranty Management
+
+Features that must exist:
+
+Product Registration:
+
+* Product Name
+* Brand
+* Category
+* Model
+* Serial Number
+* Purchase Date
+* Price
+* Retailer
+* Warranty Duration
+
+Warranty Records:
+
+* Start Date
+* Expiry Date
+* Provider
+* Coverage
+* Exclusions
+* Extended Warranty
+* Service Center Conditions
+
+Automatic Calculations:
+
+* product_age
+* warranty_remaining
+* warranty_status
+
+Supported Warranty Statuses:
+
+* Active
+* Near Expiry
+* Expired
+* Extended Warranty
+
+---
+
+# Audit Objectives
+
+Perform a comprehensive audit.
+
+Review:
+
+* Backend
+* API Routes
+* Database Models
+* Services
+* Middleware
+* Authentication Logic
+* Authorization Logic
+* Validation
+* Security
+* Tests
+
+---
+
+# Authentication Audit
+
+Verify:
+
+* Passwords are hashed using bcrypt or equivalent
+* No plaintext password storage
+* JWT tokens are securely generated
+* Access tokens expire
+* Refresh tokens expire
+* Tokens cannot be forged
+* Logout invalidates tokens
+* Token revocation works
+* Secrets are stored in environment variables
+* Sensitive information is never exposed in responses
+
+Fix any issue found.
+
+---
+
+# RBAC Audit
+
+Verify:
+
+* Every protected endpoint checks authentication
+* Every protected endpoint checks authorization
+* Role escalation is impossible
+* Customers cannot access reviewer endpoints
+* Customers cannot access admin endpoints
+* Employees cannot access admin endpoints
+* Reviewers cannot manage users
+
+Fix any issue found.
+
+Generate decorators if missing.
+
+Example:
+
+@role_required("admin")
+
+@role_required("reviewer")
+
+@role_required("employee", "admin")
+
+---
+
+# API Security Audit
+
+Check for:
+
+* Broken access control
+* IDOR vulnerabilities
+* Missing authorization checks
+* Missing ownership checks
+* Insecure direct object references
+* Sensitive data leakage
+* Excessive error information
+* Missing validation
+* SQL injection risks
+* XSS risks
+* CSRF risks where applicable
+
+Fix all issues.
+
+---
+
+# Database Audit
+
+Review all models.
+
+Verify:
+
+* Proper foreign keys
+* Cascade behavior
+* Unique constraints
+* Email uniqueness
+* Serial number uniqueness
+* Product ownership integrity
+* Warranty ownership integrity
+
+Fix any issue found.
+
+---
+
+# Product Registration Audit
+
+Verify:
+
+* Required fields enforced
+* Serial numbers validated
+* Duplicate registrations prevented
+* Invalid dates rejected
+* Invalid prices rejected
+* Ownership verification exists
+
+Fix any issue found.
+
+---
+
+# Warranty Audit
+
+Verify:
+
+Warranty calculations are correct.
+
+Review:
+
+product_age
+
+warranty_remaining
+
+warranty_status
+
+Expected behavior:
+
+IF expiry_date > today
+THEN status = Active
+
+IF expiry_date <= 30 days
+THEN status = Near Expiry
+
+IF expiry_date < today
+THEN status = Expired
+
+IF extended_warranty = true
+THEN status = Extended Warranty
+
+Fix all calculation errors.
+
+---
+
+# Business Logic Audit
+
+Verify:
+
+* Product ownership is enforced
+* Warranty belongs to correct product
+* Claims cannot reference other users' products
+* Unauthorized users cannot modify products
+* Unauthorized users cannot modify warranties
+
+Fix any issue found.
+
+---
+
+# Validation Audit
+
+Check:
+
+Registration:
+
+* Email validation
+* Password complexity
+* Duplicate emails
+
+Product:
+
+* Required fields
+* Date validation
+* Price validation
+
+Warranty:
+
+* Start date before expiry date
+* Valid provider information
+
+Fix all issues.
+
+---
+
+# Performance Audit
+
+Review:
+
+* Database queries
+* N+1 query issues
+* Missing indexes
+* Redundant queries
+* Inefficient joins
+
+Optimize where necessary.
+
+---
+
+# Testing Audit
+
+Verify existence of tests for:
+
+Authentication:
+
+* Registration
+* Login
+* Logout
+* Invalid credentials
+* JWT validation
+* Token expiration
+
+RBAC:
+
+* Customer access
+* Employee access
+* Reviewer access
+* Admin access
+* Unauthorized access
+
+Products:
+
+* Registration
+* Validation
+* Ownership checks
+
+Warranty:
+
+* Status calculation
+* Expiry handling
+* Extended warranty handling
+
+Generate missing tests.
+
+---
+
+# Refactoring Requirements
+
+Apply fixes directly.
+
+For every issue found:
+
+1. Explain the issue
+2. Explain the risk
+3. Show the original code
+4. Show the corrected code
+5. Explain the fix
+
+---
+
+# Deliverables
+
+Generate:
+
+1. Security Audit Report
+2. RBAC Audit Report
+3. Product Module Audit Report
+4. Warranty Module Audit Report
+5. Refactored Code
+6. Missing Middleware
+7. Missing Decorators
+8. Missing Tests
+9. Database Improvements
+10. Final Risk Assessment
+
+Do not merely identify issues.
+
+Automatically propose and implement production-ready fixes that follow Flask, SQLAlchemy, JWT, and OWASP security best practices.
