@@ -90,7 +90,7 @@ def product_json(product, today, *, details=False):
     current = select_current_warranty(records, today)
     original = next((w for w in records if not w.extended_warranty), None)
     result = {key: getattr(product, key) for key in
-        ("id", "product_id", "user_id", "name", "brand", "category", "model_number", "serial_number", "retailer")}
+        ("id", "product_id", "user_id", "name", "brand", "category", "model_number", "serial_number", "retailer", "is_active")}
     result.update({"purchase_date": product.purchase_date.isoformat(), "purchase_price": str(product.purchase_price),
         "product_age": calculate_product_age(product.purchase_date, today),
         "warranty_duration": warranty_json(original, today)["duration"] if original else None,

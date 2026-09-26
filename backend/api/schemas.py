@@ -100,4 +100,4 @@ def claim_json(claim):
     return {key: getattr(claim, key) for key in (
         "id", "claim_id", "user_id", "product_id", "warranty_id", "assigned_employee_id",
         "status", "fault_type", "fault_description", "damage_type", "final_decision",
-        "manual_review_required")} | {"fault_date": claim.fault_date.isoformat()}
+        "manual_review_required")} | {"fault_date": claim.fault_date.isoformat() if claim.fault_date else None}

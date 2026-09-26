@@ -13,7 +13,7 @@ Base URL for local development: `http://127.0.0.1:5000`. Send `Content-Type: app
 | `GET /api/auth/me` | Any active user | Current user; 200 |
 | `PATCH /api/auth/me` | Any active user | Optional `full_name`, `phone`; 200 |
 | `POST /api/auth/password` | Fresh access token | `current_password`, `new_password`; invalidates all tokens; 200 |
-| `POST /api/claims` | Customer, admin | `product_id`, `warranty_id`, `fault_date`, `fault_type`, `fault_description`, optional `damage_type`; 201 |
+| `POST /api/claims` | Customer only | Validated submission alias: `draft_id`, `version`; 201 (200 on retry). See [Phase 5](claims.md) |
 | `GET /api/claims/my` | Customer, admin | Own claims; paginated |
 | `GET /api/claims/assigned` | Employee, admin | Assigned claims; admin sees all; paginated |
 | `PATCH /api/claims/{id}/assignment` | Admin | `employee_id` of active employee; 200 |
@@ -92,14 +92,14 @@ Authorization: Bearer <access_token>
 
 Logout invalidates every token from that login session. The current refresh token can be used for logout after the access token expires. A second logout using the revoked token returns 401.
 
-Claim creation (requires an existing owned product and its warranty):
+Claim submission (after saving details and uploading required evidence through the [Phase 5 draft workflow](claims.md)):
 
 ```http
 POST /api/claims
 Authorization: Bearer <access_token>
 Content-Type: application/json
 
-{"product_id":1,"warranty_id":1,"fault_date":"2026-09-20","fault_type":"power","fault_description":"Device does not turn on."}
+{"draft_id":1,"version":6}
 ```
 
 Claim responses use `{ "claim": { ... } }` with IDs, owner, employee assignment, status, fault details, final decision and manual-review flag. Customer identity is taken from authentication. `user_id`, `assigned_employee_id`, decisions and status cannot be supplied at creation.

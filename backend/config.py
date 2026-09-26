@@ -29,7 +29,10 @@ def settings():
         "JWT_REFRESH_TOKEN_EXPIRES": timedelta(days=7),
         "BCRYPT_LOG_ROUNDS": 12,
         "WARRANTY_NEAR_EXPIRY_DAYS": int(os.getenv("WARRANTY_NEAR_EXPIRY_DAYS", "30")),
-        "MAX_CONTENT_LENGTH": 10 * 1024 * 1024,
+        "MAX_CONTENT_LENGTH": 11 * 1024 * 1024,  # 10 MB file plus multipart framing
+        "CLAIM_STORAGE": os.getenv("CLAIM_STORAGE", "local"),
+        "S3_BUCKET": os.getenv("S3_BUCKET"),
+        "S3_ENDPOINT_URL": os.getenv("S3_ENDPOINT_URL"),
         "UPLOAD_FOLDER": os.getenv("UPLOAD_FOLDER", str(ROOT / "instance" / "uploads")),
         "RATELIMIT_STORAGE_URI": os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
         "RATELIMIT_DEFAULT": "200 per minute",
@@ -39,6 +42,10 @@ def settings():
 
 
 def validate_config(app):
+    if app.config["CLAIM_STORAGE"] not in {"local", "s3"}:
+        raise RuntimeError("CLAIM_STORAGE must be local or s3")
+    if app.config["CLAIM_STORAGE"] == "s3" and not app.config["S3_BUCKET"]:
+        raise RuntimeError("S3_BUCKET is required for S3 storage")
     if not 0 <= app.config["WARRANTY_NEAR_EXPIRY_DAYS"] <= 365:
         raise RuntimeError("WARRANTY_NEAR_EXPIRY_DAYS must be between 0 and 365")
     secret = app.config.get("JWT_SECRET_KEY")

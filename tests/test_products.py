@@ -216,8 +216,8 @@ def test_product_and_warranty_edits_and_deletes(client,headers):
 def test_referenced_records_cannot_be_destroyed(client,app,headers,accounts):
     product = register(client,headers)
     path = f"/api/products/{product['id']}"
-    claim = client.post("/api/claims",headers=headers,json={"product_id":product["id"],"warranty_id":product["warranties"][0]["id"],
-        "fault_date":"2026-09-01","fault_type":"power","fault_description":"No power"})
+    claim = client.post("/api/claims/draft",headers=headers,json={"product_id":product["id"],
+        "fault_date":"2026-09-01","fault_type":"Electrical Failure","description":"No power"})
     assert claim.status_code == 201,claim.json
     assert client.delete(path,headers=headers).status_code == 409
     assert client.delete(f"/api/warranties/{product['warranties'][0]['id']}",headers=headers).status_code == 409

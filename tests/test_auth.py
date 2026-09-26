@@ -221,11 +221,11 @@ def test_role_matrix(client, accounts, role, path, allowed):
 def test_claim_ownership_and_assignment(client, accounts, claims):
     customer = bearer(login(client)["access_token"])
     mine = claims["customer"]
-    payload = {"product_id": mine["product"], "warranty_id": mine["warranty"],
-               "fault_date": date.today().isoformat(), "fault_type": "power", "fault_description": "No power"}
-    assert client.post("/api/claims", json=payload, headers=customer).status_code == 201
-    assert client.post("/api/claims", json=payload | {"user_id": accounts["other"]}, headers=customer).status_code == 400
-    assert client.post("/api/claims", json=payload | {"product_id": claims["other"]["product"]}, headers=customer).status_code == 400
+    payload = {"product_id": mine["product"], "fault_date": date.today().isoformat(),
+               "fault_type": "Electrical Failure", "description": "No power"}
+    assert client.post("/api/claims/draft", json=payload, headers=customer).status_code == 201
+    assert client.post("/api/claims/draft", json=payload | {"user_id": accounts["other"]}, headers=customer).status_code == 400
+    assert client.post("/api/claims/draft", json=payload | {"product_id": claims["other"]["product"]}, headers=customer).status_code == 400
     assert {item["user_id"] for item in client.get("/api/claims/my", headers=customer).json["items"]} == {accounts["customer"]}
     employee = bearer(login(client, "employee")["access_token"])
     assert len(client.get("/api/claims/assigned", headers=employee).json["items"]) == 1
@@ -297,11 +297,17 @@ def test_password_change_invalidates_all_tokens(client, accounts):
 
 
 def test_private_documents(client, accounts, claims):
+    from pypdf import PdfWriter
+    stream = BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(72, 72)
+    writer.write(stream)
+    stream.seek(0)
     employee = bearer(login(client, "employee")["access_token"])
     customer = bearer(login(client)["access_token"])
     other = bearer(login(client, "other")["access_token"])
     path = f"/api/claims/{claims['customer']['claim']}/documents"
-    response = client.post(path, headers=employee, data={"file": (BytesIO(b"%PDF-1.7\nexample"), "../../receipt.pdf")})
+    response = client.post(path, headers=employee, data={"file": (stream, "../../receipt.pdf")})
     assert response.status_code == 201, response.json
     assert response.json["document"]["filename"] == "receipt.pdf"
     url = path + "/" + str(response.json["document"]["id"])
