@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from sqlalchemy import (
     Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer,
-    JSON, Numeric, String, Text, UniqueConstraint,
+    JSON, Numeric, String, Text, UniqueConstraint, event,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from .base import Base
@@ -77,6 +77,7 @@ class Product(Timestamps, Base):
     brand: Mapped[str] = mapped_column(String(100), nullable=False)
     model_number: Mapped[str] = mapped_column(String(100), nullable=False)
     serial_number: Mapped[str] = mapped_column(String(150), index=True, nullable=False)
+    serial_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     purchase_date: Mapped[date] = mapped_column(Date, nullable=False)
     purchase_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     retailer: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -92,6 +93,7 @@ class Warranty(Timestamps, Base):
         CheckConstraint("expiry_date >= start_date", name="ck_warranties_dates"),
         CheckConstraint("coverage_duration_months > 0", name="ck_warranties_duration"),
         CheckConstraint("warranty_type IN ('standard','extended')", name="ck_warranties_type"),
+        CheckConstraint("duration_unit IN ('months','years')", name="ck_warranties_duration_unit"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     warranty_id: Mapped[str] = mapped_column(String(32), default=pid("WAR"), unique=True, nullable=False)
@@ -101,12 +103,20 @@ class Warranty(Timestamps, Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     expiry_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     coverage_duration_months: Mapped[int] = mapped_column(Integer, nullable=False)
+    duration_unit: Mapped[str] = mapped_column(String(10), default="months", nullable=False)
     coverage_conditions: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     exclusions: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     extended_warranty: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     service_center_requirements: Mapped[str | None] = mapped_column(Text)
     product: Mapped[Product] = relationship(back_populates="warranties")
     claims: Mapped[list["Claim"]] = relationship(back_populates="warranty", passive_deletes="all")
+
+
+@event.listens_for(Product, "before_insert")
+@event.listens_for(Product, "before_update")
+def set_serial_identity(mapper, connection, product):
+    from .product_identity import serial_identity
+    product.serial_key = serial_identity(product.brand, product.model_number, product.serial_number)
 
 
 class Claim(Timestamps, Base):

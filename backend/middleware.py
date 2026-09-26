@@ -1,5 +1,5 @@
 """Consistent API errors, transaction cleanup and response security headers."""
-from flask import current_app, jsonify
+from flask import current_app, jsonify, request
 from marshmallow import ValidationError
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.exceptions import HTTPException
@@ -48,6 +48,11 @@ def init_middleware(app):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        if request.blueprint == "web":
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
+                "img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+        response.headers["Referrer-Policy"] = "same-origin"
         if app.config["ASSUREX_ENV"] == "production":
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response

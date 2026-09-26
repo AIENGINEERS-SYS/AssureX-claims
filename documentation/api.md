@@ -1,5 +1,7 @@
 # AssureX Phase 3 API
 
+Phase 4 product/warranty routes and request examples are documented in the [product API reference](products.md#api). The browser interface is available at `/products`.
+
 Base URL for local development: `http://127.0.0.1:5000`. Send `Content-Type: application/json` for JSON bodies and `Authorization: Bearer <access_token>` for protected requests. Refresh takes a refresh token; logout accepts either type. Path `{id}` and product/warranty fields use integer database IDs. Public prefixed IDs are also returned for display.
 
 | Method and path | Access | Body / behavior |

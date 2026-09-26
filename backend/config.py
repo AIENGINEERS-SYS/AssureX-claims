@@ -28,6 +28,7 @@ def settings():
         "JWT_ACCESS_TOKEN_EXPIRES": timedelta(minutes=15),
         "JWT_REFRESH_TOKEN_EXPIRES": timedelta(days=7),
         "BCRYPT_LOG_ROUNDS": 12,
+        "WARRANTY_NEAR_EXPIRY_DAYS": int(os.getenv("WARRANTY_NEAR_EXPIRY_DAYS", "30")),
         "MAX_CONTENT_LENGTH": 10 * 1024 * 1024,
         "UPLOAD_FOLDER": os.getenv("UPLOAD_FOLDER", str(ROOT / "instance" / "uploads")),
         "RATELIMIT_STORAGE_URI": os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
@@ -38,6 +39,8 @@ def settings():
 
 
 def validate_config(app):
+    if not 0 <= app.config["WARRANTY_NEAR_EXPIRY_DAYS"] <= 365:
+        raise RuntimeError("WARRANTY_NEAR_EXPIRY_DAYS must be between 0 and 365")
     secret = app.config.get("JWT_SECRET_KEY")
     if not isinstance(secret, str) or len(secret.encode()) < 32 or secret.startswith("replace-"):
         raise RuntimeError("Set JWT_SECRET_KEY to a randomly generated secret of at least 32 bytes")

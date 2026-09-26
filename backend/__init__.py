@@ -29,10 +29,11 @@ def create_app(config=None):
     from .security import init_jwt_callbacks
     from .middleware import init_middleware
     from .cli import init_cli
-    from .api import auth, admin, claims, review
+    from .api import auth, admin, claims, review, products
+    from .web import bp as web_bp
     init_jwt_callbacks()
     init_middleware(app)
     init_cli(app)
-    for blueprint in (auth.bp, admin.bp, claims.bp, review.bp):
+    for blueprint in (auth.bp, admin.bp, claims.bp, review.bp, products.bp, web_bp):
         app.register_blueprint(blueprint)
     return app

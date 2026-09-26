@@ -38,3 +38,9 @@ The core relational schema is in `backend/db/models.py`, its first Alembic migra
 The Flask application factory is `backend:create_app`. Authentication uses Bcrypt, signed access/refresh JWTs, persisted session revocation, and database-backed customer/employee/reviewer/admin permissions. Protected claim and review workflows, private document uploads, administrator user management and audit records are included.
 
 Start with [setup and component explanations](documentation/authentication.md), then use the [API reference](documentation/api.md). Copy `config/.env.example` to `.env`, generate a JWT secret, install requirements, run `python -m flask --app backend:create_app db upgrade`, and bootstrap an admin with `python -m flask --app backend:create_app create-admin`. Run the application with `python -m flask --app backend:create_app run` and tests with `python -m pytest -q`.
+
+## Phase 4: Products and warranties
+
+Open `/products` to register products, search/filter your portfolio, edit product details and manage original/extended warranties. Product age, expiry, remaining time and status are calculated on the server with UTC calendar dates. The responsive frontend uses Flask, HTML, CSS and JavaScript without a build step.
+
+Run `python -m flask --app backend:create_app db upgrade` before starting the app. See [Phase 4 setup, API and date rules](documentation/products.md) for migration details, serial uniqueness, authorization, warranty history and browser tests.

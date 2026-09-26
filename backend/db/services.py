@@ -1,13 +1,15 @@
 """Transaction-aware creation helpers for relationships that span several parents."""
 from decimal import Decimal
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .models import Claim, GTMPrediction, ModelVersion, Product, PythonPrediction, Warranty
 
 
 def create_claim(session: Session, *, user_id: int, product_id: int, warranty_id: int,
                  fault_date, fault_type: str, fault_description: str, damage_type: str | None = None) -> Claim:
-    product = session.get(Product, product_id)
-    warranty = session.get(Warranty, warranty_id)
+    # Match product-management lock ordering so evidence cannot change while a claim is attached.
+    product = session.scalar(select(Product).where(Product.id == product_id).with_for_update())
+    warranty = session.scalar(select(Warranty).where(Warranty.id == warranty_id).with_for_update())
     if product is None or warranty is None or product.user_id != user_id or warranty.product_id != product_id:
         raise ValueError("Claim owner, product and warranty must refer to the same registered product")
     claim = Claim(user_id=user_id, product_id=product_id, warranty_id=warranty_id,
