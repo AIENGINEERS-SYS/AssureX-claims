@@ -3,9 +3,9 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from sqlalchemy import (
     Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer,
-    JSON, Numeric, String, Text, UniqueConstraint,
+    JSON, Numeric, String, Text, UniqueConstraint, event,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from .base import Base
 from .ids import public_id
 
@@ -25,20 +25,45 @@ class Timestamps:
 
 class User(Timestamps, Base):
     __tablename__ = "users"
-    __table_args__ = (CheckConstraint("role IN ('customer','service_center_employee','reviewer','administrator')", name="ck_users_role"),)
+    __table_args__ = (CheckConstraint("role IN ('customer','employee','reviewer','admin')", name="ck_users_role"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[str] = mapped_column(String(32), default=pid("USR"), unique=True, nullable=False)
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    full_name: Mapped[str] = mapped_column(String(201), nullable=False,
+        default=lambda ctx: " ".join(filter(None, (ctx.get_current_parameters().get("first_name"),
+                                                  ctx.get_current_parameters().get("last_name")))))
+    auth_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     phone: Mapped[str | None] = mapped_column(String(40))
     role: Mapped[str] = mapped_column(String(32), default="customer", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     products: Mapped[list["Product"]] = relationship(back_populates="owner", passive_deletes="all")
-    claims: Mapped[list["Claim"]] = relationship(back_populates="user", passive_deletes="all")
+    claims: Mapped[list["Claim"]] = relationship(back_populates="user", foreign_keys="Claim.user_id", passive_deletes="all")
     notifications: Mapped[list["Notification"]] = relationship(back_populates="user", passive_deletes="all")
+
+    @validates("email")
+    def normalize_email(self, key, value):
+        return value.strip().lower()
+
+    def set_password(self, password: str) -> None:
+        from backend.extensions import bcrypt
+        if not isinstance(password, str) or len(password) < 12 or len(password.encode("utf-8")) > 72:
+            raise ValueError("Password must contain at least 12 characters and at most 72 UTF-8 bytes")
+        self.password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
+        self.auth_version = (self.auth_version or 0) + 1
+
+    def check_password(self, password: str) -> bool:
+        from backend.extensions import bcrypt
+        if not isinstance(password, str) or len(password.encode("utf-8")) > 72:
+            return False
+        try:
+            return bcrypt.check_password_hash(self.password_hash, password)
+        except (ValueError, TypeError):
+            # Legacy seed hashes require an explicit password reset.
+            return False
 
 
 class Product(Timestamps, Base):
@@ -52,6 +77,7 @@ class Product(Timestamps, Base):
     brand: Mapped[str] = mapped_column(String(100), nullable=False)
     model_number: Mapped[str] = mapped_column(String(100), nullable=False)
     serial_number: Mapped[str] = mapped_column(String(150), index=True, nullable=False)
+    serial_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     purchase_date: Mapped[date] = mapped_column(Date, nullable=False)
     purchase_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     retailer: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -67,6 +93,7 @@ class Warranty(Timestamps, Base):
         CheckConstraint("expiry_date >= start_date", name="ck_warranties_dates"),
         CheckConstraint("coverage_duration_months > 0", name="ck_warranties_duration"),
         CheckConstraint("warranty_type IN ('standard','extended')", name="ck_warranties_type"),
+        CheckConstraint("duration_unit IN ('months','years')", name="ck_warranties_duration_unit"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     warranty_id: Mapped[str] = mapped_column(String(32), default=pid("WAR"), unique=True, nullable=False)
@@ -76,12 +103,20 @@ class Warranty(Timestamps, Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     expiry_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     coverage_duration_months: Mapped[int] = mapped_column(Integer, nullable=False)
+    duration_unit: Mapped[str] = mapped_column(String(10), default="months", nullable=False)
     coverage_conditions: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     exclusions: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     extended_warranty: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     service_center_requirements: Mapped[str | None] = mapped_column(Text)
     product: Mapped[Product] = relationship(back_populates="warranties")
     claims: Mapped[list["Claim"]] = relationship(back_populates="warranty", passive_deletes="all")
+
+
+@event.listens_for(Product, "before_insert")
+@event.listens_for(Product, "before_update")
+def set_serial_identity(mapper, connection, product):
+    from .product_identity import serial_identity
+    product.serial_key = serial_identity(product.brand, product.model_number, product.serial_number)
 
 
 class Claim(Timestamps, Base):
@@ -93,6 +128,7 @@ class Claim(Timestamps, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     claim_id: Mapped[str] = mapped_column(String(32), default=pid("CLM"), unique=True, nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    assigned_employee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), index=True)
     warranty_id: Mapped[int] = mapped_column(ForeignKey("warranties.id", ondelete="RESTRICT"), index=True)
     fault_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -104,7 +140,7 @@ class Claim(Timestamps, Base):
     final_decision: Mapped[str | None] = mapped_column(String(32))
     manual_review_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    user: Mapped[User] = relationship(back_populates="claims")
+    user: Mapped[User] = relationship(back_populates="claims", foreign_keys=[user_id])
     product: Mapped[Product] = relationship(back_populates="claims")
     warranty: Mapped[Warranty] = relationship(back_populates="claims")
     documents: Mapped[list["Document"]] = relationship(back_populates="claim", passive_deletes="all")

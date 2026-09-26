@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Manage your products and warranty protection with AssureX.">
+  <title>Products & warranties · AssureX</title>
+  <link rel="stylesheet" href="{{ url_for('web.static', filename='products.css') }}">
+  <script type="module" src="{{ url_for('web.static', filename='products.js') }}"></script>
+</head>
+<body data-server-date="{{ server_date }}">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <aside class="sidebar" aria-label="Main navigation">
+    <a class="brand" href="/products" data-nav><span class="brand-mark" aria-hidden="true">A</span>Assure<span>X</span></a>
+    <p class="nav-caption">YOUR WORKSPACE</p>
+    <nav><a class="nav-item current" href="/products" data-nav aria-current="page"><span aria-hidden="true">▦</span> Products & warranties</a></nav>
+    <div class="sidebar-note"><span class="shield" aria-hidden="true">✓</span><strong>A little more peace of mind.</strong><p>Your products. Your cover.<br>Everything in one place.</p></div>
+    <div class="sidebar-footer">ASSUREX <span>Claims made clear.</span></div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><span class="breadcrumb">Workspace <span aria-hidden="true">/</span> <strong>Products & warranties</strong></span><div class="account"><span id="account-name">Your account</span><button id="sign-in" class="button small secondary" type="button">Sign in</button><button id="sign-out" class="button small secondary" type="button" hidden>Sign out</button></div></header>
+    <main id="main" tabindex="-1">
+      <div id="notice" class="notice" role="status" hidden></div>
+      <div id="view" aria-live="polite"><div class="empty-state"><h1>Your products, protected.</h1><p>Sign in to manage your products and warranties.</p><button class="button" type="button" data-action="login">Sign in to your account</button></div></div>
+    </main>
+    <footer class="page-footer">A clearer view of the things you rely on.<span>AssureX · Product protection</span></footer>
+  </div>
+  <dialog id="auth-dialog" aria-labelledby="auth-title">
+    <div class="dialog-heading"><div><p class="eyebrow">WELCOME TO ASSUREX</p><h2 id="auth-title">Sign in to your account</h2></div><button type="button" class="icon-button" data-close="auth-dialog" aria-label="Close sign in">×</button></div>
+    <p id="auth-description" class="muted">Keep your products and warranty information together.</p>
+    <form id="auth-form">
+      <label id="full-name-field" hidden>Full name<input name="full_name" autocomplete="name" maxlength="201"></label>
+      <label>Email address<input name="email" type="email" autocomplete="username" required maxlength="320"></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <div class="form-error" role="alert" hidden></div>
+      <button type="submit" class="button full-width" id="auth-submit">Sign in</button>
+    </form>
+    <p class="auth-toggle"><span id="auth-prompt">New to AssureX?</span> <button type="button" class="text-button" id="auth-mode">Create an account</button></p>
+    <p class="fine-print">For your security, this page keeps your session in memory. Reloading the page requires signing in again.</p>
+  </dialog>
+  <dialog id="warranty-dialog" aria-labelledby="warranty-title"><div id="warranty-dialog-content"></div></dialog>
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><h2 id="confirm-title">Delete this record?</h2><p id="confirm-description"></p><div class="form-error" role="alert" hidden></div><div class="form-actions"><button type="button" class="button secondary" data-close="confirm-dialog">Cancel</button><button type="button" class="button danger" id="confirm-delete">Delete</button></div></dialog>
+  <noscript><p class="noscript">JavaScript is required to use the product dashboard. The REST API remains available at /api/products.</p></noscript>
+</body>
+</html>
