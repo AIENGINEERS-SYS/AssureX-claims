@@ -45,7 +45,7 @@ def upload_to_claim(claim, data, upload):
         audit("duplicate_detected", claim, new={"scope": "same_claim"}, claim_id=claim.id)
         db.session.commit()
         raise document_error("duplicate_document", "This document has already been uploaded to this claim.", 409)
-    lock_draft(claim, data["version"])
+    _lock_review_claim(claim, data["version"])
     if not claim.product_id:
         _audit_rejection(claim, "invalid_claim")
         raise document_error("invalid_claim", "Select a product before uploading documents.")
@@ -107,7 +107,10 @@ def accessible_document(document_id):
     elif current_user.role == "employee":
         statement = statement.where(Claim.assigned_employee_id == current_user.id)
     elif current_user.role == "reviewer":
-        statement = statement.where(Claim.manual_review_required.is_(True))
+        statement = statement.where(((Claim.manual_review_required.is_(True)) &
+            ((Claim.assigned_reviewer_id.is_(None)) | (Claim.assigned_reviewer_id == current_user.id))) |
+            ((Claim.status == "additional_information_required") &
+             (Claim.assigned_reviewer_id == current_user.id)))
     document = db.session.scalar(statement)
     if document is None:
         raise NotFound("Document not found.")
@@ -126,7 +129,10 @@ def list_documents(identifier):
         if current_user.role == "employee":
             statement = statement.where(Claim.assigned_employee_id == current_user.id)
         elif current_user.role == "reviewer":
-            statement = statement.where(Claim.manual_review_required.is_(True))
+            statement = statement.where(((Claim.manual_review_required.is_(True)) &
+                ((Claim.assigned_reviewer_id.is_(None)) | (Claim.assigned_reviewer_id == current_user.id))) |
+                ((Claim.status == "additional_information_required") &
+                 (Claim.assigned_reviewer_id == current_user.id)))
         claim = db.session.scalar(statement)
         if claim is None:
             raise NotFound("Claim not found.")

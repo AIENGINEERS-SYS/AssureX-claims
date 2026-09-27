@@ -55,6 +55,7 @@ def settings():
         "JWT_REFRESH_TOKEN_EXPIRES": timedelta(days=7),
         "BCRYPT_LOG_ROUNDS": 12,
         "WARRANTY_NEAR_EXPIRY_DAYS": _integer("WARRANTY_NEAR_EXPIRY_DAYS", 30),
+        "DASHBOARD_DISAGREEMENT_GAP": _decimal("DASHBOARD_DISAGREEMENT_GAP", 0.20),
         # Multipart framing receives one bounded document per request.
         "MAX_CONTENT_LENGTH": (document_size * 1024 * 1024) + (1024 * 1024),
         "MAX_DOCUMENT_SIZE_MB": document_size,
@@ -100,6 +101,8 @@ def validate_config(app):
         raise RuntimeError("OCR_TIMEOUT_SECONDS must be between 1 and 300")
     if not 0 <= app.config["WARRANTY_NEAR_EXPIRY_DAYS"] <= 365:
         raise RuntimeError("WARRANTY_NEAR_EXPIRY_DAYS must be between 0 and 365")
+    if not 0 <= app.config["DASHBOARD_DISAGREEMENT_GAP"] <= 1:
+        raise RuntimeError("DASHBOARD_DISAGREEMENT_GAP must be between 0 and 1")
     secret = app.config.get("JWT_SECRET_KEY")
     if not isinstance(secret, str) or len(secret.encode()) < 32 or secret.startswith("replace-"):
         raise RuntimeError("Set JWT_SECRET_KEY to a randomly generated secret of at least 32 bytes")

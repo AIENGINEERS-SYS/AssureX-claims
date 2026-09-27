@@ -25,3 +25,9 @@ def products(product_id=None):
 @bp.get("/claims/<path:route>")
 def claims(route=None):
     return render_template("claims.html")
+
+
+@bp.get("/dashboard")
+@bp.get("/dashboard/<path:route>")
+def dashboard(route=None):
+    return render_template("dashboard.html")

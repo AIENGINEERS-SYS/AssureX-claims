@@ -131,6 +131,7 @@ class Claim(Timestamps, Base):
     claim_id: Mapped[str] = mapped_column(String(32), default=pid("CLM"), unique=True, nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     assigned_employee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    assigned_reviewer_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), index=True)
     warranty_id: Mapped[int | None] = mapped_column(ForeignKey("warranties.id", ondelete="RESTRICT"), index=True)
     fault_date: Mapped[date | None] = mapped_column(Date)
@@ -336,6 +337,8 @@ class Notification(Base):
     notification_id: Mapped[str] = mapped_column(String(32), default=pid("NTF"), unique=True, nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     claim_id: Mapped[int | None] = mapped_column(ForeignKey("claims.id", ondelete="RESTRICT"), index=True)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"), index=True)
+    dedupe_key: Mapped[str | None] = mapped_column(String(160), unique=True)
     type: Mapped[str] = mapped_column(String(60), nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
@@ -346,6 +349,26 @@ class Notification(Base):
 
 
 Index("ix_notifications_user_unread", Notification.user_id, Notification.is_read)
+Index("ix_notifications_user_created", Notification.user_id, Notification.created_at)
+Index("ix_claims_user_updated", Claim.user_id, Claim.updated_at)
+Index("ix_claims_review_queue", Claim.status, Claim.assigned_reviewer_id, Claim.submitted_at)
+Index("ix_reviews_reviewer_date", Review.reviewer_user_id, Review.reviewed_at)
+
+
+class DuplicateInvestigation(Base):
+    __tablename__ = "duplicate_investigations"
+    __table_args__ = (
+        UniqueConstraint("claim_id", "matching_claim_id", "file_hash", name="uq_duplicate_pair_hash"),
+        CheckConstraint("claim_id < matching_claim_id", name="ck_duplicate_pair_order"),
+        CheckConstraint("status IN ('confirmed','false_positive')", name="ck_duplicate_status"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    claim_id: Mapped[int] = mapped_column(ForeignKey("claims.id", ondelete="RESTRICT"), index=True)
+    matching_claim_id: Mapped[int] = mapped_column(ForeignKey("claims.id", ondelete="RESTRICT"), index=True)
+    file_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    reviewer_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
 class AuditLog(Base):

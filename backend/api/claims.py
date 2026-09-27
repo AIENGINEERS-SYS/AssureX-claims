@@ -9,6 +9,7 @@ from backend.extensions import db
 from backend.security import role_required
 from .common import audit, page
 from .schemas import AssignmentSchema, StatusSchema, body, claim_json
+from backend.services.dashboard_notifications import notify
 
 bp = Blueprint("claims", __name__, url_prefix="/api/claims")
 
@@ -75,6 +76,8 @@ def status(claim_id):
     claim.status = data["status"]
     claim.manual_review_required = claim.status == "manual_review"
     audit("claim.status", claim, old={"status": previous}, new=data, claim_id=claim.id)
+    notify(claim.user_id, "claim_update", "Claim status updated",
+        f"Claim {claim.claim_id} is now {claim.status.replace('_', ' ')}.", claim_id=claim.id)
     db.session.commit()
     return {"claim": claim_json(claim)}
 

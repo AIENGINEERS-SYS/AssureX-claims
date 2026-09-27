@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client';
 import {BrowserRouter, Link, Route, Routes, useNavigate, useParams} from 'react-router-dom';
 import {useForm} from 'react-hook-form';
 import {api, allPages, errorMessage, onExpired, setSession} from './api';
-import {ReviewStep} from './components';
+import {DocumentsStep, ReviewStep} from './components';
 import Wizard from './Wizard';
 import './styles.css';
 
@@ -48,11 +48,21 @@ function ClaimList() {
 
 function ClaimDetails() {
   const {claimId} = useParams();
-  const [claim, setClaim] = useState(null), [error, setError] = useState('');
+  const [claim, setClaim] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false), [progress, setProgress] = useState(null);
   useEffect(() => {let active = true; api.get(`/claims/${encodeURIComponent(claimId)}`).then(({data}) => {if (active) setClaim(data.claim);}).catch(err => {if (active) setError(errorMessage(err));}); return () => {active = false;};}, [claimId]);
+  async function change(action) {setBusy(true);setError('');try {const {data} = await action();setClaim(data.claim);} catch (err) {setError(errorMessage(err));} finally {setBusy(false);setProgress(null);}}
+  function upload(type, file) {if (!/\.(jpe?g|png|pdf)$/i.test(file.name) || !['image/jpeg','image/png','application/pdf'].includes(file.type)) {setError('Choose a JPG, JPEG, PNG or PDF file.');return;}
+    if (file.size > (claim.document_policy?.max_document_size_mb || 10) * 1024 * 1024) {setError('File exceeds the configured upload limit.');return;}
+    change(async () => {const form = new FormData();form.append('version', claim.version);form.append('document_type', type);form.append('file', file);
+      setProgress({type, percent: 0});return api.post(`/claims/${claim.id}/documents`, form, {onUploadProgress: event => setProgress({type, percent: Math.round(event.loaded / (event.total || file.size) * 100)})});});}
+  function review(id, corrections) {change(() => api.patch(`/documents/${id}/ocr-review`, {...Object.fromEntries(Object.entries(corrections).map(([key,value]) =>
+    [key, value === '' ? null : key === 'warranty_duration' ? Number(value) : value])), confirm: true, version: claim.version}));}
+  function retry(id) {change(() => api.post(`/documents/${id}/ocr/retry`, {version: claim.version}));}
   return <>{error && <p role="alert" className="error">{error}</p>}{claim ? <><div className="confirmation"><p className="eyebrow">WE HAVE YOUR CLAIM</p><h1>{claim.claim_id}</h1>
     <p>Status: <strong>{claim.status.replaceAll('_', ' ')}</strong></p><p>Submitted {claim.submitted_at ? new Date(claim.submitted_at).toLocaleString() : claim.submission_date || 'Previously'}</p>
-    <Link to="/">Back to my claims</Link></div><div className="panel"><ReviewStep claim={claim} product={claim.product} values={claim}/></div></> : !error && <p role="status">Loading claim…</p>}</>;
+    <Link to="/">Back to my claims</Link></div>{claim.status === 'ADDITIONAL_INFORMATION_REQUIRED' && <div className="panel"><p>Additional evidence was requested. Upload it here for your reviewer.</p>
+      <DocumentsStep documents={claim.documents} upload={upload} review={review} retry={retry} progress={progress} busy={busy} policy={claim.document_policy} canRemove={false}/></div>}
+    <div className="panel"><ReviewStep claim={claim} product={claim.product} values={claim}/></div></> : !error && <p role="status">Loading claim…</p>}</>;
 }
 
 function App() {

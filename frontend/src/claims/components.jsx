@@ -131,7 +131,7 @@ function OCRReview({document, review, retry, busy}) {
   </details>;
 }
 
-export function DocumentsStep({documents, upload, remove, review, retry, progress, busy, policy}) {
+export function DocumentsStep({documents, upload, remove, review, retry, progress, busy, policy, canRemove = true}) {
   const total = documents.reduce((sum, doc) => sum + doc.file_size, 0);
   const perFile = policy?.max_document_size_mb || 10, perClaim = policy?.max_claim_upload_size_mb || 50;
   return <section><h2>Add supporting documents</h2><p>Drag a file into its category or use the picker, then review any extracted values. PDF, JPG, JPEG and PNG only.</p>
@@ -146,7 +146,7 @@ export function DocumentsStep({documents, upload, remove, review, retry, progres
       {progress?.type === type && <div role="status"><progress max="100" value={progress.percent} aria-label={`${label(type)} upload progress`}/><span>{progress.percent}% uploaded</span></div>}
       {documents.filter(doc => doc.document_type === type).map(doc => <div key={doc.id} className="document-result"><div className="file-row"><span>{doc.file_name}<small>{doc.file_type} · {(doc.file_size / 1024).toFixed(1)} KB</small></span>
         <span className={`status-chip ${doc.ocr_status}`}>{doc.ocr_status.replaceAll('_', ' ')}</span>
-        <button type="button" className="text-button" disabled={busy} onClick={() => remove(doc.id)} aria-label={`Remove ${doc.file_name}`}>Remove</button></div>
+        {canRemove && <button type="button" className="text-button" disabled={busy} onClick={() => remove(doc.id)} aria-label={`Remove ${doc.file_name}`}>Remove</button>}</div>
         <OCRReview key={`${doc.id}-${doc.ocr_processed_at}-${doc.reviewed_at}`} document={doc} review={review} retry={retry} busy={busy}/></div>)}
     </div>)}</div>
   </section>;

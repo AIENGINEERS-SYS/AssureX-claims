@@ -1,5 +1,7 @@
 # AssureX Claims
 
+Phase 23 role dashboards: [setup, APIs, and metric definitions](documentation/dashboards.md).
+
 AssureX is a claims-focused AI/ML project workspace.
 
 ## Project Structure

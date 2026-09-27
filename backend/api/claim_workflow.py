@@ -16,6 +16,7 @@ from backend.services.warranty_calculations import current_date
 from .claim_schemas import DraftSchema, DraftUpdateSchema, SubmitSchema, UploadSchema
 from .common import audit, page
 from .schemas import body
+from backend.services.dashboard_notifications import notify
 
 bp = Blueprint("claim_workflow", __name__, url_prefix="/api")
 
@@ -110,6 +111,8 @@ def submit():
         or document.cross_claim_duplicate for document in claim.documents)
     claim.current_step = 4
     audit("claim.submit", claim, new={"claim_id": claim.claim_id, "status": "SUBMITTED"}, claim_id=claim.id)
+    notify(claim.user_id, "claim_update", "Claim submitted",
+        f"Claim {claim.claim_id} was submitted successfully.", claim_id=claim.id)
     db.session.commit()
     return {"claim": workflow_json(claim)}, 201
 

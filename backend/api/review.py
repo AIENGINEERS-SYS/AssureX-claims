@@ -7,12 +7,17 @@ from backend.extensions import db
 from backend.security import role_required
 from .common import audit, page
 from .schemas import ReviewSchema, body, claim_json
+from backend.services.dashboard_notifications import notify
 
 bp = Blueprint("review", __name__, url_prefix="/api/review")
 
 
 def reviewable(claim_id):
-    claim = db.session.scalar(select(Claim).where(Claim.id == claim_id).with_for_update())
+    query = select(Claim).where(Claim.id == claim_id)
+    if current_user.role != "admin":
+        query = query.where((Claim.assigned_reviewer_id.is_(None)) |
+            (Claim.assigned_reviewer_id == current_user.id))
+    claim = db.session.scalar(query.with_for_update())
     if claim is None:
         raise NotFound("Claim not found.")
     if not claim.manual_review_required or claim.status != "manual_review":
@@ -23,8 +28,11 @@ def reviewable(claim_id):
 @bp.get("/manual")
 @role_required("reviewer")
 def manual():
-    return page(select(Claim).where(Claim.manual_review_required.is_(True),
-                                   Claim.status == "manual_review").order_by(Claim.id), claim_json)
+    query = select(Claim).where(Claim.manual_review_required.is_(True), Claim.status == "manual_review")
+    if current_user.role != "admin":
+        query = query.where((Claim.assigned_reviewer_id.is_(None)) |
+            (Claim.assigned_reviewer_id == current_user.id))
+    return page(query.order_by(Claim.id), claim_json)
 
 
 @bp.get("/<int:claim_id>/risk")
@@ -46,6 +54,9 @@ def record(claim_id, decision):
         claim.manual_review_required = False
     db.session.add(Review(claim_id=claim.id, reviewer_user_id=current_user.id,
                            decision=decision, comments=data["notes"], previous_decision=previous))
+    if decision in {"approve", "reject"}:
+        notify(claim.user_id, "claim_update", "Claim decision available",
+            f"Claim {claim.claim_id} was {claim.status}.", claim_id=claim.id)
     audit("review." + decision, claim, new={"status": claim.status}, claim_id=claim.id)
     db.session.commit()
     return {"claim": claim_json(claim)}
