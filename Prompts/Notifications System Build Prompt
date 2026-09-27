@@ -1,0 +1,481 @@
+You are a senior backend engineer, full-stack developer, messaging systems architect, and UX engineer building the AssureX Claims Management System.
+
+Implement Phase 24: Notifications System.
+
+Build a secure, scalable, event-driven notification platform that delivers timely updates to customers, reviewers, service-center employees, and administrators.
+
+The notification system must support in-app notifications immediately and be designed so email, SMS, and push notifications can be added later without major architectural changes.
+
+---
+
+# Project Context
+
+AssureX is an AI-powered warranty and insurance claims platform.
+
+Users need to be informed when important events occur during the product warranty and claims lifecycle.
+
+Notifications must improve visibility, reduce missed actions, and keep users informed about claim progress.
+
+---
+
+# Objectives
+
+Implement notifications for:
+
+* Warranty nearing expiry
+* Missing documents
+* Claim submitted
+* Additional information requested
+* Claim moved to review
+* Approved claim
+* Rejected claim
+
+Notifications must be role-aware and delivered only to authorized users.
+
+---
+
+# Technology Stack
+
+Backend:
+
+* Python
+* Flask
+* Flask-SQLAlchemy
+* Flask-JWT-Extended
+* Marshmallow
+
+Frontend:
+
+* React
+* React Query
+* Axios
+* Tailwind CSS
+
+Database:
+
+* PostgreSQL
+
+---
+
+# Notification Types
+
+Create notification events for:
+
+## Warranty Nearing Expiry
+
+Trigger when:
+
+Warranty expires within configurable thresholds:
+
+* 90 days
+* 60 days
+* 30 days
+* 7 days
+
+Notify:
+
+* Customer
+
+Example:
+
+"Your warranty for Samsung Galaxy S24 expires in 30 days."
+
+---
+
+## Missing Documents
+
+Trigger when:
+
+Claim submission lacks required documents.
+
+Examples:
+
+* Receipt missing
+* Warranty card missing
+* Product image missing
+* Diagnostic report missing
+
+Notify:
+
+* Customer
+
+Example:
+
+"Additional documents are required to continue processing Claim CLM-2026-000001."
+
+---
+
+## Claim Submitted
+
+Trigger when:
+
+Customer successfully submits a claim.
+
+Notify:
+
+* Customer
+
+Example:
+
+"Your claim CLM-2026-000001 has been successfully submitted."
+
+---
+
+## Additional Information Requested
+
+Trigger when:
+
+Reviewer requests clarification or more evidence.
+
+Notify:
+
+* Customer
+
+Example:
+
+"A reviewer has requested additional information for Claim CLM-2026-000001."
+
+---
+
+## Claim Moved to Review
+
+Trigger when:
+
+Claim enters manual review.
+
+Notify:
+
+* Customer
+* Assigned Reviewer
+
+Example:
+
+"Claim CLM-2026-000001 has been moved to manual review."
+
+---
+
+## Approved Claim
+
+Trigger when:
+
+Claim status changes to APPROVED.
+
+Notify:
+
+* Customer
+
+Example:
+
+"Your claim CLM-2026-000001 has been approved."
+
+---
+
+## Rejected Claim
+
+Trigger when:
+
+Claim status changes to REJECTED.
+
+Notify:
+
+* Customer
+
+Example:
+
+"Your claim CLM-2026-000001 has been rejected."
+
+Include optional rejection reason.
+
+---
+
+# Notification Model
+
+Create a Notification database model.
+
+Fields:
+
+* id
+* user_id
+* notification_type
+* title
+* message
+* reference_type
+* reference_id
+* priority
+* is_read
+* created_at
+* read_at
+
+---
+
+# Notification Types Enum
+
+Create enum values:
+
+* WARRANTY_EXPIRY
+* MISSING_DOCUMENTS
+* CLAIM_SUBMITTED
+* INFO_REQUESTED
+* CLAIM_IN_REVIEW
+* CLAIM_APPROVED
+* CLAIM_REJECTED
+
+---
+
+# Priority Levels
+
+Support:
+
+* LOW
+* MEDIUM
+* HIGH
+* CRITICAL
+
+Examples:
+
+Warranty expiry:
+
+* MEDIUM
+
+Missing documents:
+
+* HIGH
+
+Claim approval:
+
+* HIGH
+
+Claim rejection:
+
+* HIGH
+
+---
+
+# Notification Service Layer
+
+Create NotificationService.
+
+Responsibilities:
+
+* Create notifications
+* Mark notifications read
+* Mark all notifications read
+* Retrieve notifications
+* Delete notifications
+* Filter notifications
+
+Methods:
+
+create_notification()
+
+send_claim_submitted()
+
+send_claim_approved()
+
+send_claim_rejected()
+
+send_missing_document_alert()
+
+send_review_notification()
+
+send_warranty_expiry_alert()
+
+---
+
+# API Endpoints
+
+Create:
+
+GET /api/notifications
+
+GET /api/notifications/unread
+
+GET /api/notifications/{id}
+
+PATCH /api/notifications/{id}/read
+
+PATCH /api/notifications/read-all
+
+DELETE /api/notifications/{id}
+
+---
+
+# Notification Center UI
+
+Create React Notification Center.
+
+Features:
+
+* Notification bell icon
+* Unread count badge
+* Notification dropdown
+* Notification page
+* Read/unread state
+* Mark as read
+* Mark all as read
+
+---
+
+# Dashboard Integration
+
+Integrate with:
+
+Customer Dashboard
+
+Display:
+
+* Recent notifications
+* Unread notifications
+* Action-required notifications
+
+Reviewer Dashboard
+
+Display:
+
+* Claims moved to review
+* Missing information requests
+* Assignment notifications
+
+Admin Dashboard
+
+Display:
+
+* System alerts
+* Notification statistics
+
+---
+
+# Filtering and Search
+
+Support filtering by:
+
+* Type
+* Priority
+* Read status
+* Date range
+
+Support search by:
+
+* Claim ID
+* Notification text
+
+---
+
+# Notification Preferences
+
+Create user preferences.
+
+Allow users to enable/disable:
+
+* Warranty reminders
+* Claim updates
+* Information requests
+* Review notifications
+
+Store preferences per user.
+
+---
+
+# Scheduled Jobs
+
+Create background jobs for:
+
+Warranty expiry reminders.
+
+Run daily.
+
+Generate notifications for:
+
+* 90-day warning
+* 60-day warning
+* 30-day warning
+* 7-day warning
+
+Prevent duplicate reminders.
+
+---
+
+# Security Requirements
+
+Implement:
+
+* JWT authentication
+* Ownership verification
+* RBAC protection
+* Audit logging
+
+Verify:
+
+Users can only access their own notifications.
+
+Reviewers cannot read customer notifications.
+
+Customers cannot access reviewer notifications.
+
+Admins can view system notification analytics only when authorized.
+
+---
+
+# Performance Requirements
+
+Implement:
+
+* Pagination
+* Notification batching
+* Database indexing
+* Efficient unread counts
+* Query optimization
+
+Prevent N+1 query problems.
+
+---
+
+# Analytics
+
+Track:
+
+* Notifications sent
+* Notifications read
+* Read rate
+* Average time to read
+* Most common notification type
+
+Create admin analytics endpoint.
+
+---
+
+# Testing Requirements
+
+Generate pytest tests for:
+
+* Notification creation
+* Notification retrieval
+* Notification read status
+* Mark all read
+* Filtering
+* Pagination
+* Warranty reminder generation
+* Claim notifications
+* Unauthorized access attempts
+
+---
+
+# Deliverables
+
+Provide:
+
+1. Database models
+2. Notification service layer
+3. Flask API routes
+4. React notification components
+5. Notification center UI
+6. Dashboard integration
+7. Scheduled reminder jobs
+8. Notification preferences system
+9. Analytics endpoints
+10. Database optimizations
+11. Complete pytest suite
+12. API documentation
+13. Example request/response payloads
+
+Generate complete, production-ready code with explanations for every major component.
