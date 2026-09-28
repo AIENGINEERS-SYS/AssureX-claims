@@ -49,10 +49,22 @@ jobs:
         run: python -m compileall -q backend tests
       - name: Apply migrations
         run: python -m flask --app backend:create_app db upgrade
-      - name: PostgreSQL migration smoke test
+      - name: PostgreSQL migration and analytics smoke test
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/assurex_ci
-        run: python -m flask --app backend:create_app db upgrade
+        run: |
+          python -m flask --app backend:create_app db upgrade
+          python - <<'PY'
+          from sqlalchemy import func, select
+          from backend import create_app
+          from backend.db.models import Notification
+          from backend.extensions import db
+          app = create_app()
+          with app.app_context():
+              db.session.scalar(select(func.avg(func.extract(
+                  "epoch", Notification.read_at - Notification.created_at
+              ))).where(Notification.read_at.is_not(None)))
+          PY
       - name: Run backend test suite
         run: pytest -q tests
 

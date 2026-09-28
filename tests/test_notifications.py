@@ -12,6 +12,7 @@ from backend.services.notifications import (
     NotificationType,
     create_warranty_reminders,
     normalized_dedupe_key,
+    notification_json,
 )
 from test_auth import app, client, accounts, claims, login, bearer  # noqa: F401
 
@@ -135,6 +136,11 @@ def test_filter_search_and_pagination(client, app, accounts):
                 dedupe_key=f"test:filter:{index}",
             )
         db.session.commit()
+        old = db.session.scalar(select(Notification).where(
+            Notification.reference_id == "CLM-2026-000001"
+        ))
+        old.created_at = utcnow() - timedelta(days=10)
+        db.session.commit()
 
     headers = auth(client)
     page = client.get("/api/notifications?page=1&per_page=2", headers=headers).json
@@ -148,6 +154,11 @@ def test_filter_search_and_pagination(client, app, accounts):
     # SQL wildcard characters in user input are literals, not surprise match-all operators.
     assert client.get("/api/notifications?search=%25", headers=headers).json["total"] == 0
     assert client.get("/api/notifications?search=_", headers=headers).json["total"] == 0
+    today = date.today().isoformat()
+    five_days_ago = (date.today() - timedelta(days=5)).isoformat()
+    assert client.get(f"/api/notifications?from={today}", headers=headers).json["total"] == 4
+    assert client.get(f"/api/notifications?to={five_days_ago}", headers=headers).json["total"] == 1
+    assert client.get(f"/api/notifications?from={today}&to={five_days_ago}", headers=headers).status_code == 400
 
 
 def test_preferences_suppress_selected_event_categories(client, app, accounts, claims):
@@ -256,6 +267,12 @@ def test_claim_event_helpers_and_reviewer_notification(app, accounts, claims):
         )))
         assert {"MISSING_DOCUMENTS", "CLAIM_IN_REVIEW", "CLAIM_APPROVED", "CLAIM_REJECTED"} <= customer_types
         assert reviewer_types == {"CLAIM_IN_REVIEW"}
+        reviewer_notice = db.session.scalar(select(Notification).where(
+            Notification.user_id == accounts["reviewer"],
+            Notification.notification_type == "CLAIM_IN_REVIEW",
+        ))
+        assert reviewer_notice.reference_type == "review_claim"
+        assert notification_json(reviewer_notice)["href"] == f"/dashboard/reviewer?claim_id={claim.id}"
 
 
 def test_reviewer_request_and_decision_generate_notifications(client, app, accounts, claims):

@@ -349,7 +349,7 @@ class NotificationService:
                     title="Claim assigned for review",
                     message=f"Claim {claim.claim_id} is ready for your review.",
                     priority=NotificationPriority.HIGH,
-                    reference_type="claim",
+                    reference_type="review_claim",
                     reference_id=claim.claim_id,
                     claim_id=claim.id,
                 )
@@ -396,6 +396,8 @@ class NotificationService:
 def notification_json(item: Notification) -> dict:
     official = item.notification_type if item.notification_type in {value.value for value in NotificationType} else None
     href = (
+        f"/dashboard/reviewer?claim_id={item.claim_id}"
+        if item.reference_type == "review_claim" and item.claim_id else
         f"/claims/{item.claim_id}" if item.claim_id else
         f"/products/{item.product_id}" if item.product_id else None
     )

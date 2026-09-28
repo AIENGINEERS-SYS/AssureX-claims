@@ -170,7 +170,10 @@ function Customer({adminView = false}) {
 }
 
 function Reviewer({role}) {
-  const [page, setPage] = useState(1), [search, setSearch] = useState(''), [term, setTerm] = useState(''), [selected, setSelected] = useState(null);
+  const [searchParams] = useSearchParams(), linkedClaimId = Number(searchParams.get('claim_id'));
+  const [page, setPage] = useState(1), [search, setSearch] = useState(''), [term, setTerm] = useState(''),
+    [selected, setSelected] = useState(() => linkedClaimId > 0 ? {id: linkedClaimId} : null);
+  useEffect(() => {if (linkedClaimId > 0) setSelected({id: linkedClaimId});}, [linkedClaimId]);
   useEffect(() => {const timer = setTimeout(() => {setPage(1);setTerm(search.trim());}, 350);return () => clearTimeout(timer);}, [search]);
   const result = query('reviewer', '/dashboard/reviewer', {page, per_page: 10, search: term});
   return <QueryState result={result}>{data => <><div className="page-head"><div><span className="eyebrow">Reviewer workspace</span>
