@@ -189,13 +189,13 @@ function Login({onLogin}) {
 function Shell({user, signOut, children}) {
   const role = user.role, location = useLocation(), home = role === 'admin' ? '/dashboard/admin' : role === 'reviewer' ? '/dashboard/reviewer' : '/dashboard/customer';
   const links = [{href: home, title: 'Overview', icon: LayoutDashboard},
-    ...(role === 'customer' ? [{href: '/products', title: 'My products', icon: Box}, {href: '/claims', title: 'Claims', icon: ClipboardList}] :
-      [{href: '/dashboard/reviewer', title: 'Review queue', icon: ClipboardList}]),
-    ...(role === 'admin' ? [{href: '/dashboard/admin', title: 'Analytics', icon: ShieldAlert}] : []),
+    ...(role === 'customer' ? [{href: '/products', title: 'My products', icon: Box}, {href: '/claims', title: 'Claims', icon: ClipboardList}] : []),
+    ...(role === 'reviewer' ? [{href: '#queue', title: 'Review queue', icon: ClipboardList}] : []),
+    ...(role === 'admin' ? [{href: '/dashboard/reviewer', title: 'Reviewer workspace', icon: ShieldAlert}] : []),
     {href: '#notifications', title: 'Notifications', icon: Bell}];
   return <div className="shell"><a className="skip-link" href="#main">Skip to content</a><aside className="sidebar" aria-label="Sidebar"><Link className="brand" to={home.slice('/dashboard'.length)}><span className="brand-mark">AX</span>AssureX</Link>
     <nav aria-label="Main navigation">{links.map(({href,title,icon: Icon}, i) => href.startsWith('/dashboard/') ?
-      <Link key={`${href}-${i}`} to={href.slice('/dashboard'.length)} className="nav-link" aria-current={location.pathname === href ? 'page' : undefined}><Icon size={18}/>{title}</Link> :
+      <Link key={`${href}-${i}`} to={href.slice('/dashboard'.length)} className="nav-link" aria-current={location.pathname === href.slice('/dashboard'.length) ? 'page' : undefined}><Icon size={18}/>{title}</Link> :
       <a key={`${href}-${i}`} href={href} className="nav-link"><Icon size={18}/>{title}</a>)}</nav>
     <button className="nav-link signout" onClick={signOut}><LogOut size={18}/>Sign out</button></aside>
     <div className="workspace"><header className="topbar"><small>ASSUREX / {label(role)} WORKSPACE</small><div className="account"><a href="#notifications" aria-label="Notifications"><Bell size={18}/></a>
