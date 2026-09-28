@@ -1,13 +1,13 @@
 """Phase 24 notification center, preferences, priorities and filtering indexes.
 
 Revision ID: e24a9f4b7c10
-Revises: f23d7c9a102b
+Revises: a194c5e72d31
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "e24a9f4b7c10"
-down_revision = "f23d7c9a102b"
+down_revision = "a194c5e72d31"
 branch_labels = depends_on = None
 
 

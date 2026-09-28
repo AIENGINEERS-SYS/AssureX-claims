@@ -214,7 +214,7 @@ class NotificationService:
         reason = (reason or "").strip()
         message = f"Your claim {claim.claim_id} has been rejected."
         if reason:
-            message += f" Reason: {reason[:1000]}"
+            message += f" Reason: {reason[:2000]}"
         return self.create_notification(
             user_id=claim.user_id,
             notification_type=NotificationType.CLAIM_REJECTED,
@@ -334,6 +334,7 @@ class NotificationService:
         warranty,
         days_remaining: int,
         *,
+        threshold_days: int | None = None,
         preference: NotificationPreference | None = None,
         skip_existing_check: bool = False,
     ) -> Notification | None:
@@ -348,7 +349,7 @@ class NotificationService:
             product_id=product.id,
             dedupe_key=(
                 f"notification:{product.user_id}:warranty:{warranty.id}:"
-                f"{warranty.expiry_date.isoformat()}:{days_remaining}"
+                f"{warranty.expiry_date.isoformat()}:{threshold_days or days_remaining}"
             ),
             preference=preference,
             skip_existing_check=skip_existing_check,
@@ -421,27 +422,33 @@ def create_warranty_reminders() -> int:
         if not warranty or warranty.expiry_date < today:
             continue
         days_remaining = (warranty.expiry_date - today).days
-        if days_remaining not in thresholds:
+        if days_remaining < 0:
             continue
+        eligible_thresholds = [value for value in thresholds if days_remaining <= value]
+        if not eligible_thresholds:
+            continue
+        # Use the nearest not-yet-passed threshold. If a daily job was missed,
+        # the next run catches up once instead of silently losing that reminder.
+        threshold_days = min(eligible_thresholds)
         preference = preferences.get(product.user_id)
         if not service._enabled(product.user_id, NotificationType.WARRANTY_EXPIRY, preference):
             continue
         key = (
             f"notification:{product.user_id}:warranty:{warranty.id}:"
-            f"{warranty.expiry_date.isoformat()}:{days_remaining}"
+            f"{warranty.expiry_date.isoformat()}:{threshold_days}"
         )
-        due.append((product, warranty, days_remaining, preference, key))
+        due.append((product, warranty, days_remaining, threshold_days, preference, key))
 
     if not due:
         return 0
     existing = set(db.session.scalars(
         select(Notification.dedupe_key).where(
-            Notification.dedupe_key.in_([row[4] for row in due])
+            Notification.dedupe_key.in_([row[5] for row in due])
         )
     ))
 
     created = 0
-    for product, warranty, days_remaining, preference, key in due:
+    for product, warranty, days_remaining, threshold_days, preference, key in due:
         if key in existing:
             continue
         try:
@@ -450,6 +457,7 @@ def create_warranty_reminders() -> int:
                     product,
                     warranty,
                     days_remaining,
+                    threshold_days=threshold_days,
                     preference=preference,
                     skip_existing_check=True,
                 )

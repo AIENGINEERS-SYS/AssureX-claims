@@ -35,7 +35,7 @@ jobs:
       - name: Apply migrations
         run: python -m flask --app backend:create_app db upgrade
       - name: Run notification and migration tests
-        run: pytest -q tests/test_notifications.py tests/test_dashboard_migrations.py tests/test_auth_migrations.py
+        run: pytest -q tests/test_notifications.py tests/test_dashboard_migrations.py tests/test_auth_migrations.py tests/test_migration_heads.py
 
   frontend:
     runs-on: ubuntu-latest

@@ -6,6 +6,7 @@ from datetime import date, datetime, time, timezone, timedelta
 from flask import Blueprint, request
 from flask_jwt_extended import current_user
 from sqlalchemy import func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from werkzeug.exceptions import BadRequest, NotFound
 
 from backend.db.models import AuditLog, Notification, NotificationPreference, utcnow
@@ -125,11 +126,12 @@ def list_notifications():
     if len(search) > 120:
         raise BadRequest("Search must contain at most 120 characters.")
     if search:
-        pattern = f"%{search}%"
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped}%"
         query = query.where(or_(
-            Notification.title.ilike(pattern),
-            Notification.message.ilike(pattern),
-            Notification.reference_id.ilike(pattern),
+            Notification.title.ilike(pattern, escape="\\"),
+            Notification.message.ilike(pattern, escape="\\"),
+            Notification.reference_id.ilike(pattern, escape="\\"),
         ))
 
     result = db.paginate(
@@ -200,6 +202,20 @@ def update_preferences():
     if item is None:
         item = NotificationPreference(user_id=current_user.id)
         db.session.add(item)
+        try:
+            db.session.flush()
+        except IntegrityError:
+            # Two first-time preference updates can race on the unique user_id.
+            # Roll back only this request, lock the winner's row, then apply the
+            # caller's requested values instead of surfacing a spurious 409.
+            db.session.rollback()
+            item = db.session.scalar(
+                select(NotificationPreference)
+                .where(NotificationPreference.user_id == current_user.id)
+                .with_for_update()
+            )
+            if item is None:
+                raise
     old = preference_json(item)
     for key, value in payload.items():
         setattr(item, key, value)

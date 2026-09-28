@@ -16,7 +16,7 @@ const query = (key, path, params) => useQuery({queryKey: [key, params],
 function Badge({children, tone = ''}) {return <span className={`badge ${tone}`}>{label(children)}</span>;}
 function Tone({status}) {
   const tone = ['approved', 'active', 'extended warranty', 'confirmed'].includes(String(status).toLowerCase()) ? 'green' :
-    ['rejected', 'expired', 'high', 'failed'].includes(String(status).toLowerCase()) ? 'red' :
+    ['rejected', 'expired', 'high', 'critical', 'failed'].includes(String(status).toLowerCase()) ? 'red' :
     ['manual_review', 'submitted', 'under_evaluation'].includes(String(status).toLowerCase()) ? 'blue' : 'amber';
   return <Badge tone={tone}>{status}</Badge>;
 }

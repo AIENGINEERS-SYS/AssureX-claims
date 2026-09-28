@@ -110,6 +110,9 @@ def test_filter_search_and_pagination(client, app, accounts):
     assert search.json["total"] == 1 and search.json["items"][0]["notification_type"] == "INFO_REQUESTED"
     assert client.get("/api/notifications?type=BOGUS", headers=headers).status_code == 400
     assert client.get("/api/notifications?is_read=maybe", headers=headers).status_code == 400
+    # SQL wildcard characters in user input are literals, not surprise match-all operators.
+    assert client.get("/api/notifications?search=%25", headers=headers).json["total"] == 0
+    assert client.get("/api/notifications?search=_", headers=headers).json["total"] == 0
 
 
 def test_preferences_suppress_selected_event_categories(client, app, accounts, claims):
@@ -176,6 +179,23 @@ def test_warranty_reminder_thresholds_and_deduplication(app, accounts, claims):
         )).all()
         assert len(reminders) == 4
         assert all(item.priority == "MEDIUM" for item in reminders)
+
+
+def test_warranty_scheduler_catches_up_missed_threshold_without_spam(app, accounts, claims):
+    with app.app_context():
+        warranty = db.session.get(Warranty, claims["customer"]["warranty"])
+        warranty.expiry_date = date.today() + timedelta(days=29)
+        app.config["WARRANTY_NOTIFICATION_THRESHOLDS"] = (90, 60, 30, 7)
+        db.session.commit()
+
+        assert create_warranty_reminders() == 1
+        assert create_warranty_reminders() == 0
+        item = db.session.scalar(select(Notification).where(
+            Notification.notification_type == NotificationType.WARRANTY_EXPIRY.value
+        ))
+        assert item is not None
+        assert item.dedupe_key.endswith(":30")
+        assert "29 days" in item.message
 
 
 def test_claim_event_helpers_and_reviewer_notification(app, accounts, claims):
