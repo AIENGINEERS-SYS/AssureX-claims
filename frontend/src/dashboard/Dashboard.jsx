@@ -291,7 +291,7 @@ function Admin() {
 function Login({onLogin}) {
   const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   async function submit(event) {event.preventDefault();setBusy(true);setError('');try {const {data} = await api.post('/auth/login', {email, password});
-    if (!['customer','reviewer','admin'].includes(data.user.role)) {setError('This dashboard is available to customers, reviewers and administrators.');
+    if (!['customer','employee','reviewer','admin'].includes(data.user.role)) {setError('This dashboard is available to AssureX account roles.');
       setSession(data);try {await api.post('/auth/logout');} catch {/* Clear locally. */}setSession(null);return;}
     setSession(data);onLogin(data.user);} catch (err) {setError(errorMessage(err));} finally {setBusy(false);}}
   return <div className="login-screen"><div className="login-art"><div className="brand"><span className="brand-mark">AX</span>AssureX</div>
@@ -303,8 +303,8 @@ function Login({onLogin}) {
 }
 
 function Shell({user, signOut, children}) {
-  const role = user.role, location = useLocation(), home = role === 'admin' ? '/dashboard/admin' : role === 'reviewer' ? '/dashboard/reviewer' : '/dashboard/customer';
-  const links = [{href: home, title: 'Overview', icon: LayoutDashboard},
+  const role = user.role, location = useLocation(), home = role === 'admin' ? '/dashboard/admin' : role === 'reviewer' ? '/dashboard/reviewer' : role === 'employee' ? '/dashboard/notifications' : '/dashboard/customer';
+  const links = [...(role === 'employee' ? [] : [{href: home, title: 'Overview', icon: LayoutDashboard}]),
     ...(role === 'customer' ? [{href: '/products', title: 'My products', icon: Box}, {href: '/claims', title: 'Claims', icon: ClipboardList}] : []),
     ...(role === 'reviewer' ? [{href: '#queue', title: 'Review queue', icon: ClipboardList}] : []),
     ...(role === 'admin' ? [{href: '/dashboard/reviewer', title: 'Reviewer workspace', icon: ShieldAlert}] : []),
@@ -324,7 +324,7 @@ function DashboardApp() {
   useEffect(() => {onExpired(() => {client.clear();setUser(null);navigate('/');});return () => onExpired(() => {});}, [client,navigate]);
   async function signOut() {try {await api.post('/auth/logout');} catch {/* Session still cleared locally. */}setSession(null);setUser(null);client.clear();navigate('/');}
   if (!user) return <Login onLogin={setUser}/>;
-  const home = user.role === 'admin' ? '/admin' : user.role === 'reviewer' ? '/reviewer' : '/customer';
+  const home = user.role === 'admin' ? '/admin' : user.role === 'reviewer' ? '/reviewer' : user.role === 'employee' ? '/notifications' : '/customer';
   return <Shell user={user} signOut={signOut}><Routes>
     <Route path="/customer" element={['customer','admin'].includes(user.role) ? <Customer adminView={user.role === 'admin'}/> : <Navigate to={home} replace/>}/>
     <Route path="/reviewer" element={['reviewer','admin'].includes(user.role) ? <Reviewer role={user.role}/> : <Navigate to={home} replace/>}/>

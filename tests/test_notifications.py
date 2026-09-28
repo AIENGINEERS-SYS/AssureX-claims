@@ -39,8 +39,15 @@ def test_notification_creation_retrieval_and_ownership(client, app, accounts, cl
         service = NotificationService()
         first = service.send_claim_submitted(customer_claim)
         other = service.send_claim_submitted(other_claim)
+        employee = service.create_notification(
+            user_id=accounts["employee"],
+            notification_type=NotificationType.CLAIM_IN_REVIEW,
+            title="Assigned work",
+            message="A claim needs service-center attention.",
+            priority=NotificationPriority.HIGH,
+        )
         db.session.commit()
-        first_id, other_id = first.id, other.id
+        first_id, other_id, employee_id = first.id, other.id, employee.id
 
     customer = auth(client)
     listing = client.get("/api/notifications", headers=customer)
@@ -49,8 +56,17 @@ def test_notification_creation_retrieval_and_ownership(client, app, accounts, cl
     assert listing.json["items"][0]["notification_type"] == "CLAIM_SUBMITTED"
     assert client.get(f"/api/notifications/{first_id}", headers=customer).status_code == 200
     assert client.get(f"/api/notifications/{other_id}", headers=customer).status_code == 404
+    assert client.get(f"/api/notifications/{employee_id}", headers=customer).status_code == 404
     assert client.patch(f"/api/notifications/{other_id}/read", headers=customer).status_code == 404
     assert client.delete(f"/api/notifications/{other_id}", headers=customer).status_code == 404
+
+    employee_headers = auth(client, "employee")
+    employee_listing = client.get("/api/notifications", headers=employee_headers)
+    assert employee_listing.status_code == 200 and employee_listing.json["total"] == 1
+    assert employee_listing.json["items"][0]["id"] == employee_id
+
+    # Administrator analytics access must not become a bypass for private notices.
+    assert client.get(f"/api/notifications/{first_id}", headers=auth(client, "admin")).status_code == 404
 
 
 def test_long_dedupe_keys_are_stable_and_safe(app, accounts):
