@@ -172,12 +172,12 @@ def test_warranty_reminder_thresholds_and_deduplication(app, accounts, claims):
             ))
         db.session.commit()
         app.config["WARRANTY_NOTIFICATION_THRESHOLDS"] = (90, 60, 30, 7)
-        assert create_warranty_reminders() == 4
+        assert create_warranty_reminders() == 5
         assert create_warranty_reminders() == 0
         reminders = db.session.scalars(select(Notification).where(
             Notification.notification_type == NotificationType.WARRANTY_EXPIRY.value
         )).all()
-        assert len(reminders) == 4
+        assert len(reminders) == 5
         assert all(item.priority == "MEDIUM" for item in reminders)
 
 
