@@ -1,256 +1,347 @@
 # AssureX Claims
 
-AssureX is a warranty and insurance claims platform for registering products, maintaining warranty information, submitting evidence-backed claims, and routing claims through automated evaluation and manual review.
+AssureX is a warranty and insurance claims application. Customers can register products and warranties, create claims, upload evidence, review OCR results, submit claims, and track their status. Reviewers and administrators get separate dashboards for claim handling, duplicate-document review, workload, and operational reporting.
 
-This guide describes the workflows that are available in the repository today. It also calls out the two requested capabilities that are not yet implemented as end-user features: **Claim Summary Card generation** and **claim-report export**.
+The application now uses two independent services:
 
-## Prerequisites
+- `frontend/`: a standalone React 19 and Vite single-page application.
+- `backend/`: a Flask JSON API mounted under `/api`.
+
+The browser calls the Flask API through `VITE_API_URL`; Flask does not serve the React application or its assets.
+
+## Feature status
+
+| Capability | Status |
+| --- | --- |
+| Registration, login, products, and warranties | Implemented |
+| Claim drafts, uploads, OCR review, submission, and tracking | Implemented |
+| Customer, reviewer, and administrator dashboards | Implemented |
+| Exact duplicate-document detection and reviewer decisions | Implemented |
+| Python model prediction generation | Data model and artifacts only; runtime inference is not implemented |
+| Google Teachable Machine prediction generation | Data model and artifacts only; runtime inference is not implemented |
+| Warranty-rule and contradiction generation | Result storage exists; the evaluation engine is not implemented |
+| Claim Summary Card generation | Path storage exists; card generation is not implemented |
+| PDF or CSV claim-report export | Not implemented |
+
+The incomplete capabilities are documented below so that stored model or rule data is not mistaken for a working inference pipeline.
+
+## Install the application
+
+### Requirements
 
 - Python 3.11+
 - Node.js 20+ and npm
-- PostgreSQL for production (SQLite is the default local configuration)
-- Tesseract OCR for local image/scanned-PDF OCR; see [document processing notes](documentation/documents.md)
+- Tesseract OCR for image and scanned-PDF extraction
+- SQLite for local development; PostgreSQL is required in production
+- Redis for production rate limiting
 
-## Install and run
+### Local setup
 
-Clone the repository and create local configuration:
+From the repository root, create a virtual environment and install both services:
 
-```bash
-git clone <repository-url>
-cd assurex
-cp config/.env.example .env
-```
-
-Set a strong, unique `JWT_SECRET_KEY` in `.env`. For production, also set `DATABASE_URL` to PostgreSQL and configure a non-public document storage location.
-
-Install the backend and frontend dependencies, then apply the database migrations:
-
-```bash
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 npm --prefix frontend ci
+```
+
+Create the local environment files:
+
+```powershell
+Copy-Item config/.env.example .env
+Copy-Item frontend/.env.example frontend/.env.local
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Put the generated value in `.env` as `JWT_SECRET_KEY`. The default development configuration uses SQLite and permits the Vite origins `http://localhost:5173` and `http://127.0.0.1:5173`.
+
+Apply the database migrations:
+
+```powershell
 python -m flask --app backend:create_app db upgrade
 ```
 
-Create an administrator when needed:
+Start the API in the first terminal. The Flask CLI loads the repository `.env` file:
 
-```bash
-python -m flask --app backend:create_app create-admin
+```powershell
+python -m flask --app backend:create_app run --host=127.0.0.1 --port=8000
 ```
 
-Start the API and frontend as separate processes:
+Start React in a second terminal:
 
-```bash
+```powershell
+npm --prefix frontend run dev -- --host 127.0.0.1
+```
+
+Open `http://127.0.0.1:5173`. Confirm the API is available at `http://127.0.0.1:8000/api/health`; it should return `{"status":"ok"}`.
+
+For a local production-style API process, export the values from `.env` into the process environment before starting Waitress. Waitress does not load `.env` automatically:
+
+```powershell
 waitress-serve --listen=127.0.0.1:8000 --call backend:create_app
-npm --prefix frontend run dev
 ```
 
-Open `http://localhost:5173`. Copy `frontend/.env.example` to `frontend/.env.local` to configure the public API URL. Flask serves JSON under `/api` only and permits requests from the origins in `FRONTEND_ORIGINS`.
+## Railway deployment
 
-For the two-service Railway configuration, see [documentation/railway-deployment.md](documentation/railway-deployment.md).
+Railway must contain two services created from the same repository.
+
+### API service
+
+- Root directory: `/`
+- Railway config: `/railway.json`
+- Railpack config: `/railpack.json`
+- Health check: `/api/health`
+- Start command: `sh scripts/railpack-start.sh`
+
+Required production variables include:
+
+```dotenv
+ASSUREX_ENV=production
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+JWT_SECRET_KEY=<random-secret-at-least-32-bytes>
+RATELIMIT_STORAGE_URI=${{Redis.REDIS_URL}}
+FRONTEND_ORIGINS=https://${{Frontend.RAILWAY_PUBLIC_DOMAIN}}
+```
+
+The start script applies migrations and starts Waitress on Railway's assigned `PORT`.
+
+### Frontend service
+
+- Root directory: `/frontend`
+- Railway config: `/frontend/railway.json`
+- Railpack config: `/frontend/railpack.json`
+- Health check: `/`
+
+Set the public API URL at build time:
+
+```dotenv
+VITE_API_URL=https://${{API.RAILWAY_PUBLIC_DOMAIN}}/api
+```
+
+Generate a public domain for each service. When using custom domains, set `VITE_API_URL` to the final API domain and `FRONTEND_ORIGINS` to the exact frontend HTTPS origin. Wildcard production origins are rejected. See [Railway deployment](documentation/railway-deployment.md) for the complete setup.
 
 ## Register or log in
 
-Use the registration or login screens in the application. New self-service registrations are customer accounts.
+1. Open `/products` in the React application.
+2. Select **Create an account** to register, then enter a full name, email address, and password of at least 12 characters.
+3. AssureX signs in the new customer after successful registration.
+4. Returning users select **Sign in** and enter their email address and password.
 
-API clients may register with `POST /api/auth/register`:
+Self-service registration always creates a customer. Create the first administrator from the repository root:
 
-```json
-{
-  "full_name": "Ada Okafor",
-  "email": "ada@example.com",
-  "password": "a-long-unique-password"
-}
+```powershell
+python -m flask --app backend:create_app create-admin
 ```
 
-Log in with `POST /api/auth/login` using the email and password. Save the returned access token and send it with protected requests:
-
-```http
-Authorization: Bearer <access-token>
-```
-
-Log out with `POST /api/auth/logout`. The backend revokes the current JWT, so it cannot be reused.
+The command securely prompts for the email address, full name, and password. Reviewer accounts are provisioned by an administrator through `POST /api/admin/users`.
 
 ## Register a product
 
-1. Sign in as a customer and open **My products** or `/products`.
+1. Sign in and open `/products`.
 2. Select **Register product**.
-3. Enter the product name, brand, category, model, serial number, purchase date, price, retailer, and warranty duration/unit.
-4. Save the form. Purchase dates in the future, negative prices, missing required fields, and duplicate serial numbers are rejected by the backend.
+3. Enter the product name, brand, category, model, serial number, purchase date, purchase price, and retailer.
+4. Complete the original-warranty section.
+5. Check the calculated expiry preview and select **Register product**.
 
-The product API is available at `POST /api/products`. Customers can only view and change their own products.
+The API rejects future purchase dates, invalid prices, missing required fields, and duplicate product identities. Customers can only access their own products.
 
 ## Add warranty information
 
-The initial warranty is supplied during product registration. Its expiry is calculated from the start date and duration; do not manually calculate the expiry date.
+An original warranty can be created with the product. Enter its duration and unit, and optionally provide its provider, start date, coverage, exclusions, and service-center conditions.
 
-To add an extended warranty:
+To add or extend coverage later:
 
-1. Open the product details page.
-2. Select **Add extended warranty**.
-3. Provide provider, start date, duration, coverage, exclusions, and service-center conditions.
-4. Save it and verify the resulting warranty timeline.
+1. Open `/products` and select the product.
+2. Select **Add warranty** or **Extend warranty**.
+3. Enter the provider, start date, duration, coverage, exclusions, and service-center conditions.
+4. Check the calculated expiry date and select **Add warranty**.
 
-The product warranty endpoints follow the product resource, including `POST /api/products/<product-id>/warranties`. Warranty status is calculated server-side as Active, Near Expiry, Expired, or Extended Warranty.
+Warranty periods cannot overlap. AssureX calculates the status as Active, Near Expiry, Expired, Extended Warranty, Not Started, or No Warranty.
 
 ## Create a claim
 
-1. Open **Claims** or `/claims` and select **New claim**.
-2. Select one of your active registered products. The backend verifies ownership and prevents claims for another customer’s product.
-3. Enter the fault date, fault type, damage category, and a 20–2000 character description. Optionally add repair history and previous-replacement details.
-4. Use **Save draft** to leave and resume later, or continue to the evidence step.
+1. Open `/claims` and select **New claim**.
+2. Select one of your registered products.
+3. Enter the fault date, fault type, damage category, and a description of at least 20 characters.
+4. Optionally add repair history and indicate whether the product was previously replaced.
+5. Select **Next** to continue through the wizard.
 
-The wizard creates and updates drafts through `POST /api/claims/draft` and `PUT /api/claims/draft/<id>`. Drafts can be edited before final submission.
+Drafts save automatically. **Save and exit** returns to the claim list, where **Resume draft** continues an unfinished claim.
 
 ## Upload documents
 
-In the evidence step, choose the document type and drag files into the uploader or use the file picker. The usual required categories are receipt, product image, serial-number image, and damage evidence; the applicable warranty policy can require additional documents.
+Use step 3 of the claim wizard to upload evidence. Choose a document type and then select a file. A complete submission requires:
 
-Supported formats are PDF, JPG, JPEG, and PNG. The default limits are 10 MB per document, 20 documents per claim, and 50 MB total per claim. AssureX validates extension, MIME type, file signature, decodability, file size, content hash, duplicate files, and ownership before storage.
+- Receipt
+- Product image
+- Serial-number image
+- Damage evidence
 
-The claim wizard uses `POST /api/claims/upload`; customers responding to a reviewer request use `POST /api/claims/<claim-id>/documents`. A duplicate file within the same claim is rejected. A matching file on another claim is retained and flagged for authorized reviewer investigation.
+PDF, JPG, JPEG, and PNG files are accepted. Defaults are 10 MB per file, 20 files per claim, and 50 MB total. These limits are configurable in `.env`.
+
+Each file is checked for its extension, MIME type, file signature, decodability, size, ownership, and SHA-256 content hash before private storage. The same content cannot be added twice to one claim.
 
 ## Verify extracted information
 
-After a supported document is uploaded, wait for its OCR state to finish. Open the document’s extraction review and compare the detected purchase date, invoice number, product, model, serial number, retailer, price, and warranty duration against the source document.
+After upload, expand **Document analysis** for the document. AssureX shows the OCR status, preview, raw OCR text, extracted fields, field confidence, and values that need attention.
 
-1. Correct any incorrect or missing values.
-2. Save the corrections and explicitly confirm the extraction.
-3. Continue only after reviewing information that requires attention.
+1. Compare each detected value with the original document.
+2. Correct any missing or incorrect purchase date, invoice number, product, model, serial number, retailer, price, or warranty duration.
+3. Select **Confirm extracted information**.
+4. Use **Retry analysis** if processing failed and OCR should be attempted again.
 
-API clients can read OCR output with `GET /api/documents/<document-id>/ocr` and submit corrections with `PATCH /api/documents/<document-id>/ocr-review`. The original OCR result is preserved separately from user-confirmed values for auditability; OCR never overwrites product or claim data automatically.
+Submission is blocked while OCR is processing or while extracted values remain unconfirmed. A failed OCR result can proceed after review, but the claim is flagged for manual attention.
 
-## Submit and track a claim
+## Submit a claim
 
-Review the product, claim details, and uploaded evidence, then select **Submit claim**. The backend verifies ownership, required fields, document completeness, and file validation before creating a submitted claim and its human-readable claim ID.
+1. Continue to step 4 after all required evidence is present and reviewed.
+2. Check the product, incident details, and evidence summary.
+3. Select **Submit claim**.
 
-Track progress from `/claims` or `/dashboard/customer`, or with `GET /api/claims/my`. Claim statuses include Draft, Submitted, Under Evaluation, Additional Information Requested, Manual Review, Approved, Rejected, and Closed. Notifications and required actions are visible from the customer dashboard.
+The API rechecks ownership, required fields, document completeness, review state, upload limits, and stored-file integrity. A successful submission receives an ID such as `CLM-2026-000001`. Retrying after a lost response returns the same submitted claim instead of creating a duplicate.
 
-## Generate a Python prediction
+## Generate the Python prediction
 
-The bundled Python model can evaluate a submitted claim independently. Send the claim ID to:
+Python prediction generation is **not currently available through the application**. There is no supported **Generate prediction** control and no `/api/predict/python` route.
 
-```bash
-curl -X POST http://127.0.0.1:5000/api/predict/python \
-  -H "Authorization: Bearer <access-token>" \
-  -H "Content-Type: application/json" \
-  -d '{"claim_id": 123}'
-```
+The repository contains serialized files under `models/` and database tables for immutable `PythonPrediction` records. Those files are not loaded by the Flask application, and their presence does not mean that a submitted claim has been scored. A runtime feature still needs validated feature preparation, model loading, version registration, an authenticated inference endpoint, persistence, failure handling, and tests before this workflow can be documented as executable.
 
-The response contains a display prediction, canonical class, per-class confidences, top confidence, and model metadata. Customers can run this only for their own claims; reviewers and administrators have role-appropriate access.
+## Interpret Python confidence scores
 
-### Interpret Python confidence scores
+Stored prediction records use three canonical classes:
 
-`confidence` is a probability distribution across the canonical classes `valid`, `invalid`, and `manual_review`; the values should total approximately 1.0. `top_confidence` is the largest value and supports the displayed prediction. A high score means the model prefers that class, not that the claim is automatically approved or rejected. Warranty rules, contradictions, missing evidence, duplicate signals, and reviewer decisions remain authoritative.
+- `valid`: evidence favors a valid claim.
+- `invalid`: evidence favors an invalid claim.
+- `manual_review`: evidence is uncertain or requires a person.
 
-## Claim Summary Card status
+The corresponding fields are `confidence_valid`, `confidence_invalid`, and `confidence_manual_review`; each must be between `0` and `1`. `top_confidence` is the largest score and must belong to `predicted_class`.
 
-**Claim Summary Card generation is not implemented in this repository as a user-facing API or UI.** The GTM integration can retain a `GTM_SUMMARY_CARD_PATH` supplied by an external provider, but AssureX does not generate or render a summary card itself. Do not treat this metadata field as an export or generated report.
+A confidence value expresses model preference, not a final claim decision and not a calibrated fraud probability. Reviewers must also consider documents, warranty coverage, duplicate warnings, and rule results. Because runtime inference is not implemented, the current UI only displays confidence records that were inserted by trusted fixtures or another internal process.
 
-## Obtain a Google Teachable Machine prediction
+## Generate the Claim Summary Card
 
-The GTM endpoint is present at `POST /api/predict/gtm` and uses the same body as the Python endpoint. It deliberately operates independently from the Python model.
+Claim Summary Card generation is **not currently implemented**. A GTM prediction record has a required `claim_summary_card_path`, but that field only stores a private path supplied by another trusted process. The backend does not create an image or document, expose a card endpoint, or render a card in React.
 
-Before it can produce a result, configure an installed provider in `.env`:
+## Obtain the Google Teachable Machine prediction
 
-```dotenv
-GTM_MODEL_PROVIDER=your_package.gtm:predict
-GTM_MODEL_VERSION=your-model-version
-```
-
-The configured callable receives normalized claim features and must return a canonical `prediction_class` plus a valid confidence distribution for `valid`, `invalid`, and `manual_review`. If no provider is configured, the endpoint returns `503` with `MODEL_UNAVAILABLE`; it does not invent a prediction. Restart the backend after changing configuration.
+Google Teachable Machine inference is **not currently connected to Flask or React**. The `gtm_model/` directory contains exported artifacts, and the database can store immutable `GTMPrediction` rows, but there is no TensorFlow runtime integration and no `/api/predict/gtm` route. A GTM result cannot currently be generated from the application.
 
 ## Compare both model results
 
-Trigger a full evaluation after the Python and GTM providers are available:
+When both Python and GTM prediction rows already exist, the reviewer and administrator dashboards can display their latest classes and confidence values. The reviewer dashboard identifies a disagreement when the classes differ or when the top-confidence gap reaches `DASHBOARD_DISAGREEMENT_GAP` (default `0.20`).
 
-```bash
-curl -X POST http://127.0.0.1:5000/api/claims/123/evaluate \
-  -H "Authorization: Bearer <access-token>"
-```
-
-Read the stored result with `GET /api/claims/123/decision`. The comparison reports both classes, each top confidence, the absolute confidence difference, and a status:
-
-- **Strong Match** — same class, sufficiently confident, and a very small gap.
-- **Acceptable Match** — same class with a moderate gap.
-- **Weak Match** — same class but weaker confidence or a noticeable gap.
-- **Model Disagreement** — the predicted classes differ.
-- **Uncertain Result** — either model is insufficiently confident or unavailable.
-
-The thresholds are centrally configured through `MODEL_COMPARISON_MIN_CONFIDENCE` (default `0.55`), `MODEL_COMPARISON_STRONG_GAP` (default `0.08`), and `MODEL_COMPARISON_ACCEPTABLE_GAP` (default `0.20`). A failed or unconfigured GTM model preserves the working Python result and routes the automated outcome toward manual review instead of fabricating a comparison.
+This is dashboard comparison of stored records, not an evaluation trigger. The application currently has no endpoint that runs both models or creates missing prediction rows.
 
 ## Review warranty-rule results
 
-The combined evaluation loads the warranty policy for the product category and returns structured checks for warranty expiry, serial-number verification, required/missing documents, repair authorization, and excluded damage. Policies live in `policies/warranty_policies.json` and are configured for electronics, appliances, and mobile devices.
+The database and reviewer API can retain immutable `RuleResult` rows with a rule code, category, result, severity, details, and policy version. For a claim that is currently in manual review and visible to the signed-in reviewer, existing results can be read with:
 
-Open the claim decision to review each check’s pass/warning/failure state, severity, evidence, and message. A missing or invalid policy is treated safely and is not considered a valid warranty.
+```http
+GET /api/review/<numeric-claim-id>/risk
+Authorization: Bearer <access-token>
+```
+
+No current service evaluates `data/assurex_nigeria_policy_rules_v2.json` and generates these rows. Therefore, an empty result means no rules have been recorded; it must not be interpreted as a passed warranty check.
 
 ## Check contradictions
 
-The same decision response includes structured contradiction findings. Typical checks include purchase date after claim date, repair date before purchase, fault date after claim date, serial-number conflicts, and product-model conflicts.
+Automated contradiction detection is **not currently implemented**. OCR preserves original and customer-confirmed values so a future evaluator can compare dates, serial numbers, models, invoices, and product details without overwriting source evidence. There is currently no contradiction endpoint, UI section, or automatic contradiction result generation.
 
-Each finding lists its severity, source fields, and conflicting values. Missing data is not automatically labelled a contradiction. High-severity contradictions route the claim to manual review rather than silently discarding evidence.
+Reviewers can still compare the claim details with each source document manually from the reviewer case dialog.
 
 ## Identify duplicate claims
 
-Every uploaded document is hashed with SHA-256. Exact matches are checked within the current claim and across claims. Cross-claim matches are retained as evidence and exposed only to authorized reviewers and administrators.
+AssureX currently detects exact duplicate documents, not general semantic claim similarity.
 
-The combined evaluation also produces a claim duplicate-risk result from normalized signals such as serial number, invoice number, product/model, claimant, claim date, description similarity, and document hashes. Review the score, risk level, related claim IDs, and contributing signals in the reviewer view; customers do not receive another claimant’s private details.
+1. Every accepted document receives a SHA-256 content hash.
+2. Re-uploading the same content to the same claim is rejected, even under a different filename.
+3. Matching content on another claim is retained and privately flagged.
+4. A reviewer or administrator opens `/dashboard/reviewer` and checks **Duplicate warning queue**.
+5. Select **Review**, inspect the related claim, and choose **Confirm duplicate** or **Reject warning**.
+
+Customer-facing responses do not disclose another customer's claim details. Similar descriptions or product details without an exact document match are not currently classified as duplicates.
 
 ## Access the manual-review queue
 
-Sign in as a reviewer or administrator and open `/dashboard/reviewer`. The queue lists manual-review claims with recommendation, model-comparison status, duplicate risk, contradiction count, documents, and priority.
+1. Sign in with a reviewer or administrator account at `/dashboard`.
+2. Open `/dashboard/reviewer`.
+3. Search the **Manual review queue** and select **Open case**.
+4. Inspect the claim details and attached evidence.
+5. Assign a reviewer, add notes, request another document, approve, or reject as permitted.
 
-Reviewer APIs include:
-
-- `GET /api/reviewer/queue`
-- `GET /api/reviewer/claims/<claim-id>`
-- `GET /api/reviewer/claims/<claim-id>/audit-history`
-- `POST /api/review/<claim-id>/approve`
-- `POST /api/review/<claim-id>/reject`
-- `POST /api/review/<claim-id>/notes`
-- `POST /api/review/<claim-id>/override`
-
-Use the claim detail view to inspect original machine results, documents, OCR values, rule results, contradictions, duplicate warnings, and the automated explanation. Approvals, rejections, information requests, comments, and overrides are written to append-oriented review history. Overrides require a reason and never overwrite the original model outputs.
+The queue contains claims whose status is `manual_review` and whose `manual_review_required` flag is true. Administrators can see all eligible cases; reviewers see unassigned cases and cases assigned to them.
 
 ## Access the administrator dashboard
 
-Administrators can open `/dashboard/admin` for system-wide claim, warranty, fraud, reviewer-workload, and model-monitoring metrics. The dashboard APIs are JWT-protected and role-scoped; customers cannot access reviewer or administrator data, and reviewers cannot access administrator-only data.
+Create an administrator with the `create-admin` command, then sign in at `/dashboard`. Administrators are routed to `/dashboard/admin`.
 
-Customer, reviewer, and administrator dashboard data is available through the `/api/dashboard/*` endpoints. See [dashboard documentation](documentation/dashboards.md) for the available responses and widgets.
+The dashboard includes claim volume and outcomes, warranty distribution, model-record confidence, model disagreement, exact duplicate alerts, reviewer workload, fraud-rule aggregates, customer growth, and model-version history. Administrators can also open the reviewer workspace and view a customer dashboard by customer ID.
 
-## Export a claim report status
+Metrics based on predictions or rule results remain empty until trusted records exist; the dashboard does not run models or rule engines.
 
-**Claim-report export is not implemented in the current repository.** There is no supported PDF/CSV export endpoint or frontend export control. Authorized users can read claim and decision data through the normal API, but that is not a substitute for a production report export. Add a dedicated, access-controlled export feature before relying on this workflow.
+## Track claim status
+
+Customers can track claims from `/claims` or `/dashboard/customer`. The claim list shows drafts and submitted claims, while the dashboard shows recent claims, action items, notifications, and aggregate status counts.
+
+Supported statuses are:
+
+- Draft
+- Submitted
+- Under Evaluation
+- Additional Information Required
+- Manual Review
+- Approved
+- Rejected
+- Closed
+
+When more evidence is requested, open the claim from the notification or claim list, upload the requested document, verify its extraction, and wait for the reviewer to resume the case.
+
+## Export a claim report
+
+Claim-report export is **not currently implemented**. There is no PDF or CSV export control and no access-controlled report endpoint. The JSON claim and dashboard APIs are operational data interfaces, not formatted claim reports.
 
 ## Run automated tests
 
-Apply migrations first, then run the backend suite from the repository root:
+Install the test dependencies and ensure the frontend dependencies are present:
 
-```bash
+```powershell
+python -m pip install -r tests/requirements.txt
+npm --prefix frontend ci
+```
+
+Run the backend and API test suite from the repository root:
+
+```powershell
 python -m pytest -q
 ```
 
-Build the frontend to catch TypeScript/bundling regressions:
+Build the standalone frontend to catch bundling errors:
 
-```bash
+```powershell
 npm --prefix frontend run build
 ```
 
-Run targeted evaluation tests when changing prediction, rules, duplicates, decisions, or reviewer workflows:
+Browser tests are opt-in and require Node.js plus Chrome or Edge:
 
-```bash
-python -m pytest tests/test_evaluation.py -q
+```powershell
+$env:ASSUREX_BROWSER_TESTS="1"
+python -m pytest tests/test_product_browser.py tests/test_claim_browser.py -q
 ```
 
-## Further documentation
+Set `ASSUREX_BROWSER_PATH` when Chrome or Edge is not installed in a location detected by the tests.
 
-- [Authentication and RBAC](documentation/authentication.md)
+## Additional documentation
+
+- [Authentication and role-based access](documentation/authentication.md)
 - [Products and warranties](documentation/products.md)
 - [Claim submission](documentation/claims.md)
 - [Document upload and OCR](documentation/documents.md)
-- [Prediction, rules, decisions, and manual review](documentation/evaluation.md)
 - [Dashboards](documentation/dashboards.md)
+- [Database design](documentation/database.md)
+- [Railway deployment](documentation/railway-deployment.md)
 
 ## Security notes
 
-Keep `.env` out of version control, use a unique production JWT secret, serve the application over HTTPS, and restrict document storage to non-public paths. The backend enforces JWT authentication, RBAC, ownership checks, ORM-backed database access, secure document validation, and token revocation. Rate limiting should be enabled at the deployment edge or application layer for authentication, upload, prediction, and dashboard routes.
+Never commit `.env`, production secrets, uploaded documents, tokens, or database credentials. Production requires HTTPS, PostgreSQL, a shared Redis rate-limit store, an explicit HTTPS `FRONTEND_ORIGINS` list, and private document storage. Keep `JWT_SECRET_KEY` unique per environment and at least 32 bytes long.

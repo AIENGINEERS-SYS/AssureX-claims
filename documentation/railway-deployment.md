@@ -47,7 +47,7 @@ Create `.env` at the repository root and `frontend/.env.local` from the provided
 ```powershell
 # Terminal 1, repository root
 python -m flask --app backend:create_app db upgrade
-waitress-serve --listen=127.0.0.1:8000 --call backend:create_app
+python -m flask --app backend:create_app run --host=127.0.0.1 --port=8000
 
 # Terminal 2
 cd frontend
@@ -56,3 +56,5 @@ npm run dev
 ```
 
 Open `http://localhost:5173`. The Vite app calls `http://127.0.0.1:8000/api` directly, and Flask allows only the configured development origins.
+
+The Flask CLI loads `.env` automatically. If Waitress is used locally instead, export the values from `.env` into the process environment before starting it; Railway already injects those variables into the API service.
