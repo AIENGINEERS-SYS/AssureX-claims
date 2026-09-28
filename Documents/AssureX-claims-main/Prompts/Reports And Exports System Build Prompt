@@ -1,0 +1,536 @@
+You are a senior backend engineer, reporting systems architect, data analytics engineer, and full-stack developer building the AssureX Claims Management System.
+
+Implement Phase 26: Reports and Exports.
+
+Build a production-ready reporting and export system that generates detailed claim reports and allows authorized users to export claim data in CSV and Excel-compatible formats.
+
+The system must support individual claim reports, bulk exports, reviewer reports, and administrative reporting while maintaining strict security and auditability.
+
+---
+
+# Project Context
+
+AssureX is an AI-powered warranty and insurance claims platform.
+
+Every processed claim generates multiple outputs from business rules, machine learning models, document verification, warranty validation, and human review.
+
+Users need downloadable reports that consolidate all relevant claim information into a single report.
+
+Reports must be suitable for:
+
+* Customers
+* Reviewers
+* Service-center employees
+* Administrators
+* Auditors
+* Compliance teams
+
+---
+
+# Objectives
+
+Implement a reporting system that generates downloadable claim reports containing:
+
+* Claim Details
+* Evidence
+* Warranty Status
+* Python Prediction
+* GTM Prediction
+* Confidence Comparison
+* Policy Result
+* Contradictions
+* Final Recommendation
+* Reviewer Comments
+
+Also support:
+
+* CSV exports
+* Excel exports
+* Bulk exports
+* Filtered exports
+
+---
+
+# Technology Stack
+
+Backend:
+
+* Python
+* Flask
+* SQLAlchemy
+* Marshmallow
+
+Reporting:
+
+* ReportLab (PDF generation)
+* Pandas
+* OpenPyXL (Excel)
+
+Frontend:
+
+* React
+* React Query
+* Axios
+* Tailwind CSS
+
+Database:
+
+* PostgreSQL
+
+---
+
+# Report Types
+
+Implement:
+
+### Individual Claim Report
+
+Generate a complete report for a single claim.
+
+### Reviewer Report
+
+Generate reports for all claims assigned to a reviewer.
+
+### Product Report
+
+Generate claims and warranty history for a product.
+
+### Customer Report
+
+Generate all claims and warranties associated with a customer.
+
+### Administrative Report
+
+Generate system-wide reporting and analytics.
+
+---
+
+# Individual Claim Report Structure
+
+Create a professionally formatted PDF report.
+
+---
+
+## Section 1: Claim Details
+
+Display:
+
+* Claim ID
+* Customer Name
+* Product ID
+* Product Name
+* Brand
+* Model
+* Category
+* Serial Number
+* Submission Date
+* Claim Status
+
+---
+
+## Section 2: Product and Warranty Information
+
+Display:
+
+* Purchase Date
+* Product Age
+* Warranty Provider
+* Warranty Start Date
+* Warranty Expiry Date
+* Warranty Remaining Days
+* Warranty Status
+
+Statuses:
+
+* Active
+* Near Expiry
+* Expired
+* Extended Warranty
+
+---
+
+## Section 3: Evidence Summary
+
+List uploaded evidence:
+
+* Receipt
+* Warranty Card
+* Product Image
+* Serial Number Image
+* Damage Evidence
+* Diagnostic Report
+* Repair Report
+
+Display:
+
+* File Name
+* File Type
+* Upload Date
+
+Include evidence availability indicators.
+
+---
+
+## Section 4: AI Prediction Results
+
+Display:
+
+### Python Model Prediction
+
+Show:
+
+* Prediction
+* Confidence Score
+
+Example:
+
+Valid Claim
+
+Confidence: 91%
+
+---
+
+### GTM Prediction
+
+Show:
+
+* Prediction
+* Confidence Score
+
+Example:
+
+Manual Review
+
+Confidence: 73%
+
+---
+
+## Section 5: Confidence Comparison
+
+Create comparison table.
+
+Display:
+
+| Model  | Prediction    | Confidence |
+| ------ | ------------- | ---------- |
+| Python | Valid         | 91%        |
+| GTM    | Manual Review | 73%        |
+
+Calculate:
+
+* Confidence Difference
+* Agreement Status
+
+Statuses:
+
+* Agreement
+* Disagreement
+
+---
+
+## Section 6: Policy Evaluation
+
+Display:
+
+* Policy Matched
+* Policy Violations
+* Coverage Status
+* Exclusions Triggered
+
+Examples:
+
+Covered
+
+Not Covered
+
+Requires Review
+
+---
+
+## Section 7: Contradiction Analysis
+
+Display detected contradictions.
+
+Examples:
+
+* Product age inconsistent with warranty period
+* Receipt date conflicts with registration date
+* Serial number mismatch
+* Evidence inconsistency
+
+For each contradiction:
+
+* Type
+* Severity
+* Description
+
+Severity:
+
+* Low
+* Medium
+* High
+* Critical
+
+---
+
+## Section 8: Final Recommendation
+
+Display system recommendation.
+
+Possible values:
+
+* Approve
+* Reject
+* Manual Review
+
+Show reasoning summary.
+
+---
+
+## Section 9: Reviewer Comments
+
+Display:
+
+* Reviewer Name
+* Review Date
+* Comments
+* Decision Notes
+
+Include history if multiple reviewers participated.
+
+---
+
+## Section 10: Audit Trail
+
+Display:
+
+* Claim Created
+* Documents Uploaded
+* Validation Completed
+* Review Events
+* Status Changes
+
+Include timestamps.
+
+---
+
+# PDF Generation Requirements
+
+Generate professional PDF reports.
+
+Include:
+
+* AssureX Branding
+* Logo Placeholder
+* Page Numbers
+* Generation Timestamp
+* Report Version
+
+Support:
+
+* Multi-page reports
+* Large evidence lists
+
+---
+
+# CSV Export Requirements
+
+Support export of:
+
+Claims
+
+Products
+
+Warranties
+
+Review Results
+
+Notifications
+
+Analytics
+
+---
+
+## Claims CSV Fields
+
+Include:
+
+* Claim ID
+* Customer
+* Product
+* Warranty Status
+* Claim Status
+* Python Prediction
+* GTM Prediction
+* Confidence Score
+* Final Recommendation
+* Submission Date
+
+---
+
+# Excel Export Requirements
+
+Generate .xlsx files.
+
+Create worksheets:
+
+### Claims
+
+### Products
+
+### Warranties
+
+### Reviews
+
+### Analytics
+
+Format:
+
+* Headers
+* Auto-sizing columns
+* Date formatting
+* Conditional formatting for statuses
+
+---
+
+# Bulk Export Functionality
+
+Allow exporting:
+
+* All claims
+* Filtered claims
+* Reviewer queue
+* Expiring warranties
+* Approved claims
+* Rejected claims
+* Manual review claims
+
+Support search/filter integration from Phase 25.
+
+---
+
+# API Endpoints
+
+Create:
+
+GET /api/reports/claim/{claim_id}
+
+GET /api/reports/customer/{customer_id}
+
+GET /api/reports/product/{product_id}
+
+GET /api/reports/reviewer/{reviewer_id}
+
+POST /api/reports/export/csv
+
+POST /api/reports/export/excel
+
+POST /api/reports/export/pdf
+
+---
+
+# Frontend Requirements
+
+Create report center.
+
+Features:
+
+* Generate Report
+* Download PDF
+* Download CSV
+* Download Excel
+* Export Filters
+* Report History
+
+Display generation progress.
+
+---
+
+# Security Requirements
+
+Implement:
+
+* JWT Authentication
+* RBAC Protection
+* Ownership Verification
+* Audit Logging
+
+Verify:
+
+Customers can access only their own reports.
+
+Reviewers can access assigned claims.
+
+Employees can access authorized claims.
+
+Admins can access system-wide reports.
+
+Prevent report access through direct URL manipulation.
+
+---
+
+# Performance Requirements
+
+Implement:
+
+* Streaming exports for large datasets
+* Pagination
+* Background generation for large reports
+* Database optimization
+* Query caching
+
+Support exports containing 100,000+ records.
+
+---
+
+# Audit Logging
+
+Track:
+
+* Report generation
+* Export downloads
+* User ID
+* Export type
+* Timestamp
+
+Store report access history.
+
+---
+
+# Testing Requirements
+
+Generate pytest tests for:
+
+* PDF generation
+* CSV export
+* Excel export
+* Report permissions
+* Ownership checks
+* Reviewer access
+* Admin access
+* Large dataset exports
+* Report content validation
+
+---
+
+# Deliverables
+
+Provide:
+
+1. Reporting architecture
+2. Database models/updates
+3. Report generation service
+4. PDF generation implementation
+5. CSV export implementation
+6. Excel export implementation
+7. Flask API routes
+8. React report center UI
+9. Background export jobs
+10. Audit logging
+11. Performance optimizations
+12. Complete pytest suite
+13. API documentation
+14. Example report outputs
+15. Example request/response payloads
+
+Generate complete, production-ready code with explanations for every major component, following Flask, PostgreSQL, React, and OWASP security best practices.

@@ -1,0 +1,281 @@
+{
+  "verified_on": "2026-09-25",
+  "policies": [
+    {
+      "policy_code": "FCCPA-IMPLIED-QUALITY",
+      "provider": "Nigeria statutory consumer protection",
+      "product_group": "All consumer goods",
+      "brands": [],
+      "months": 3,
+      "start_basis": "delivery/purchase",
+      "return_window_days": 90,
+      "proof_required": "Transaction evidence strongly recommended",
+      "authorized_channel_required": false,
+      "key_exclusions": "Not a substitute for factual defect assessment; statutory rights depend on circumstances",
+      "typical_remedy": "Repair, replacement or refund for qualifying defective goods within statutory window",
+      "source_url": "https://fccpc.gov.ng/wp-content/uploads/2022/07/FCCPA-2018.pdf",
+      "source_scope": "Nigeria; statutory baseline"
+    },
+    {
+      "policy_code": "SLOT-DOA-DAP",
+      "provider": "SLOT Nigeria",
+      "product_group": "Phones, laptops and electronics",
+      "brands": [
+        "Samsung",
+        "TECNO",
+        "Infinix",
+        "itel"
+      ],
+      "months": 12,
+      "start_basis": "purchase",
+      "return_window_days": 7,
+      "proof_required": "Proof of purchase; fault verification",
+      "authorized_channel_required": true,
+      "key_exclusions": "Liquid/physical damage, wrong voltage, misuse, unauthorized repair, tampered labels, expired warranty",
+      "typical_remedy": "DOA replacement; DAP authorized-service repair",
+      "source_url": "https://slot.ng/warranty-policy",
+      "source_scope": "Nigeria retailer policy; some products may have 2-year DAP"
+    },
+    {
+      "policy_code": "CARL-TECNO-PHONE",
+      "provider": "Carlcare / TECNO",
+      "product_group": "Smartphone",
+      "brands": [
+        "TECNO"
+      ],
+      "months": 13,
+      "start_basis": "purchase",
+      "return_window_days": 0,
+      "proof_required": "Warranty/IMEI evidence",
+      "authorized_channel_required": true,
+      "key_exclusions": "Liquid damage, broken screen, wrong voltage, misuse, unauthorized repair, altered labels, expired warranty",
+      "typical_remedy": "Authorized service repair; eligibility depends on fault assessment",
+      "source_url": "https://www.carlcare.com/ng/service-policy/mobile-phone/",
+      "source_scope": "Nigeria"
+    },
+    {
+      "policy_code": "CARL-INFINIX-PHONE",
+      "provider": "Carlcare / Infinix",
+      "product_group": "Smartphone",
+      "brands": [
+        "Infinix"
+      ],
+      "months": 12,
+      "start_basis": "purchase",
+      "return_window_days": 0,
+      "proof_required": "Warranty/IMEI evidence",
+      "authorized_channel_required": true,
+      "key_exclusions": "Liquid damage, broken screen, wrong voltage, misuse, unauthorized repair, altered labels, expired warranty",
+      "typical_remedy": "Authorized service repair",
+      "source_url": "https://www.carlcare.com/ng/service-policy/mobile-phone/",
+      "source_scope": "Nigeria; 365-day smartphone warranty"
+    },
+    {
+      "policy_code": "CARL-ITEL-PHONE",
+      "provider": "Carlcare / itel",
+      "product_group": "Smartphone",
+      "brands": [
+        "itel"
+      ],
+      "months": 12,
+      "start_basis": "purchase",
+      "return_window_days": 0,
+      "proof_required": "Warranty/IMEI evidence",
+      "authorized_channel_required": true,
+      "key_exclusions": "Liquid damage, broken screen, wrong voltage, misuse, unauthorized repair, altered labels, expired warranty",
+      "typical_remedy": "Authorized service repair",
+      "source_url": "https://www.carlcare.com/ng/service-policy/mobile-phone/",
+      "source_scope": "Nigeria"
+    },
+    {
+      "policy_code": "SAMSUNG-AFRICA-MOBILE",
+      "provider": "Samsung Africa",
+      "product_group": "Smartphone",
+      "brands": [
+        "Samsung"
+      ],
+      "months": 24,
+      "start_basis": "purchase",
+      "return_window_days": 0,
+      "proof_required": "Original proof of purchase; serial/model details",
+      "authorized_channel_required": true,
+      "key_exclusions": "Subject to Samsung warranty procedure and authorized service assessment",
+      "typical_remedy": "Authorized service repair",
+      "source_url": "https://www.samsung.com/africa_en/support/warranty/",
+      "source_scope": "Samsung Africa warranty page; verify model/country applicability"
+    },
+    {
+      "policy_code": "CARL-ORAIMO-ACCESSORY",
+      "provider": "Carlcare / Oraimo",
+      "product_group": "Accessories and small electronics",
+      "brands": [
+        "Oraimo"
+      ],
+      "months": 12,
+      "start_basis": "purchase",
+      "return_window_days": 0,
+      "proof_required": "Receipt; identifiable serial where applicable",
+      "authorized_channel_required": true,
+      "key_exclusions": "Wrong voltage, accident, water, commercial use, unauthorized service, altered serial, normal wear",
+      "typical_remedy": "Replacement for qualifying product failure",
+      "source_url": "https://www.carlcare.com/ng/service-policy/oraimo/",
+      "source_scope": "Nigeria"
+    },
+    {
+      "policy_code": "CARL-INFINIX-LAPTOP",
+      "provider": "Carlcare / Infinix",
+      "product_group": "Laptop",
+      "brands": [
+        "Infinix"
+      ],
+      "months": 12,
+      "start_basis": "purchase",
+      "return_window_days": 0,
+      "proof_required": "Proof of purchase and serial number",
+      "authorized_channel_required": true,
+      "key_exclusions": "Unauthorized service, misuse, wrong voltage, power surge without protection, altered serial",
+      "typical_remedy": "Authorized warranty service",
+      "source_url": "https://www.carlcare.com/ng/service-policy/laptop/",
+      "source_scope": "Nigeria"
+    },
+    {
+      "policy_code": "CARL-SYINIX-HOME",
+      "provider": "Carlcare / Syinix",
+      "product_group": "Home appliance",
+      "brands": [
+        "Syinix"
+      ],
+      "months": 25,
+      "start_basis": "purchase",
+      "return_window_days": 0,
+      "proof_required": "Proof of purchase and serial number",
+      "authorized_channel_required": true,
+      "key_exclusions": "Unauthorized service, misuse, wrong voltage, power surge without protection, altered serial",
+      "typical_remedy": "Authorized warranty service",
+      "source_url": "https://www.carlcare.com/ng/service-policy/home-appliance/",
+      "source_scope": "Nigeria; selected appliance terms vary by product"
+    },
+    {
+      "policy_code": "LG-NG-HOME",
+      "provider": "LG Electronics",
+      "product_group": "TV / refrigerator / air conditioner / sound system",
+      "brands": [
+        "LG"
+      ],
+      "months": 24,
+      "start_basis": "purchase",
+      "return_window_days": 0,
+      "proof_required": "Purchase/warranty evidence; service-centre assessment",
+      "authorized_channel_required": true,
+      "key_exclusions": "Product-specific conditions apply; core-part warranties may differ",
+      "typical_remedy": "Free repair service through authorized service centres during warranty",
+      "source_url": "https://www.lg.com/africa/support/warranty",
+      "source_scope": "Nigeria standard warranty table"
+    },
+    {
+      "policy_code": "LUMINOUS-NG-INVERTER",
+      "provider": "Luminous Nigeria",
+      "product_group": "Inverter",
+      "brands": [
+        "Luminous"
+      ],
+      "months": 12,
+      "start_basis": "purchase",
+      "return_window_days": 0,
+      "proof_required": "Purchase details and service assessment",
+      "authorized_channel_required": true,
+      "key_exclusions": "Manufacturing-defect warranty; misuse/poor installation may be outside coverage",
+      "typical_remedy": "Repair or replacement for manufacturing defects",
+      "source_url": "https://www.luminousnigeria.com/contact",
+      "source_scope": "Nigeria"
+    },
+    {
+      "policy_code": "LUMINOUS-NG-BATTERY",
+      "provider": "Luminous Nigeria",
+      "product_group": "Tubular battery",
+      "brands": [
+        "Luminous"
+      ],
+      "months": 24,
+      "start_basis": "purchase",
+      "return_window_days": 0,
+      "proof_required": "Purchase details and service assessment",
+      "authorized_channel_required": true,
+      "key_exclusions": "Manufacturing-defect warranty; maintenance/charging misuse may affect eligibility",
+      "typical_remedy": "Repair or replacement for manufacturing defects",
+      "source_url": "https://www.luminousnigeria.com/contact",
+      "source_scope": "Nigeria; up to 24 months"
+    },
+    {
+      "policy_code": "FIRMAN-GEN-1Y",
+      "provider": "FIRMAN",
+      "product_group": "Generator",
+      "brands": [
+        "FIRMAN"
+      ],
+      "months": 12,
+      "start_basis": "manufacture",
+      "return_window_days": 0,
+      "proof_required": "Model, serial, nameplate photo, proof of purchase if available, fault evidence",
+      "authorized_channel_required": true,
+      "key_exclusions": "Normal wear, maintenance items, wrong fuel/oil, overload, misuse, improper storage, accident, corrosion, unauthorized repair",
+      "typical_remedy": "Distributor-coordinated inspection and repair",
+      "source_url": "https://www.sumecfirman.com/faqs",
+      "source_scope": "Manufacturer FAQ; warranty begins from manufacture date"
+    },
+    {
+      "policy_code": "FELICITY-NG-SELECTED-INV",
+      "provider": "Felicity Solar Nigeria",
+      "product_group": "Selected inverter / charge controller",
+      "brands": [
+        "Felicity Solar"
+      ],
+      "months": 60,
+      "start_basis": "purchase",
+      "return_window_days": 0,
+      "proof_required": "Purchase/model/serial details and support assessment",
+      "authorized_channel_required": true,
+      "key_exclusions": "Applies to selected listed series; improper use or tampering may void coverage",
+      "typical_remedy": "Warranty service under selected-series extended warranty",
+      "source_url": "https://www.felicitysolar.ng/blog/17-17",
+      "source_scope": "Nigeria; selected series announced in 2025"
+    },
+    {
+      "policy_code": "JUMIA-RETURN-PROTECT",
+      "provider": "Jumia Nigeria",
+      "product_group": "Marketplace consumer goods",
+      "brands": [],
+      "months": 0,
+      "start_basis": "delivery",
+      "return_window_days": 7,
+      "proof_required": "Order/purchase evidence; returned item and reason evidence",
+      "authorized_channel_required": false,
+      "key_exclusions": "Eligibility depends on marketplace/Mall status, item condition and return rules",
+      "typical_remedy": "Refund/replacement for eligible damaged, wrong or counterfeit delivery",
+      "source_url": "https://pay.jumia.com.ng/cms/personal-faq.html",
+      "source_scope": "Nigeria; marketplace generally 7 days, Jumia Mall 15 days"
+    }
+  ],
+  "sources": {
+    "FCCPA": "https://fccpc.gov.ng/wp-content/uploads/2022/07/FCCPA-2018.pdf",
+    "FCCPC_RIGHTS": "https://fccpc.gov.ng/consumers/consumer-rights-responsibilities/rights-responsibilities/",
+    "FCCPC_COMPLAINT": "https://fccpc.gov.ng/consumers/complaint-handling/",
+    "FCCPC_PHONE_REFUND": "https://fccpc.gov.ng/ben-collins-ndinojuo/",
+    "FCCPC_TESTIMONIALS": "https://fccpc.gov.ng/category/testimonials/page/2/",
+    "FCCPC_BATTERY": "https://fccpc.gov.ng/ayo-olowonihi/",
+    "FCCPC_TESTIMONIALS2": "https://fccpc.gov.ng/category/testimonials-2/",
+    "SLOT": "https://slot.ng/warranty-policy",
+    "CARL_PHONE": "https://www.carlcare.com/ng/service-policy/mobile-phone/",
+    "CARL_ACCESSORY": "https://www.carlcare.com/ng/service-policy/retail-accessory/",
+    "CARL_LAPTOP": "https://www.carlcare.com/ng/service-policy/laptop/",
+    "CARL_HOME": "https://www.carlcare.com/ng/service-policy/home-appliance/",
+    "CARL_CROSSREGION": "https://www.carlcare.com/ng/news-detail/no-warranty-service-policy-in-nigeria/",
+    "ORAIMO": "https://www.carlcare.com/ng/service-policy/oraimo/",
+    "LG": "https://www.lg.com/africa/support/warranty",
+    "SAMSUNG": "https://www.samsung.com/africa_en/support/warranty/",
+    "LUMINOUS": "https://www.luminousnigeria.com/contact",
+    "FIRMAN": "https://www.sumecfirman.com/faqs",
+    "FELICITY": "https://www.felicitysolar.ng/blog/17-17",
+    "JUMIA": "https://pay.jumia.com.ng/cms/personal-faq.html"
+  }
+}
