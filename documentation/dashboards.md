@@ -9,7 +9,7 @@ AssureX exposes `/dashboard/customer`, `/dashboard/reviewer`, and `/dashboard/ad
 3. Run `python -m flask --app backend:create_app db upgrade`.
 4. Run `npm --prefix frontend ci` and `npm --prefix frontend run build`.
 5. Start Flask and Vite, open `/dashboard` on either service, and sign in with an existing account. Flask redirects browser routes to `FRONTEND_URL`.
-6. Schedule `python -m flask --app backend:create_app dashboard-reminders` daily. It creates idempotent warranty notices.
+6. Schedule `python -m flask --app backend:create_app dashboard-reminders` daily. Phase 24 creates idempotent 90/60/30/7-day warranty notices.
 
 Access and refresh tokens stay in browser memory. A reload requires sign-in. React Query caches each role's data for 15 seconds and refetches every 30 seconds and on focus. API responses use `Cache-Control: no-store`. Production needs a shared Redis limiter; large dashboard reads are limited to 60/minute.
 
@@ -42,8 +42,12 @@ All paths below begin with `/api`; pass `Authorization: Bearer <access_token>`. 
 | `GET /dashboard/analytics` | admin | Same platform aggregates for analytics consumers. |
 | `GET /dashboard/analytics/models?page=1&per_page=10` | admin | Paginated model evaluation history. |
 | `GET /dashboard/trends?window=30d&interval=day` | customer, reviewer, admin | Windows `7d`, `30d`, `90d`, `12m`; intervals day, week, month. Reviewers see their own decisions. |
-| `GET /dashboard/notifications?page=1&per_page=10&unread=true` | authenticated | Own notifications and read state. |
-| `PATCH /dashboard/notifications/{id}/read` | authenticated | Mark owned notification read. Other IDs return 404. |
+| `GET /notifications?page=1&per_page=20&is_read=false` | authenticated | Phase 24 notification center with type, priority, read, date and text filters. |
+| `GET /notifications/unread?limit=5` | authenticated | Efficient unread count plus recent notices for the bell. |
+| `PATCH /notifications/{id}/read` | authenticated | Mark an owned notification read. Other IDs return 404. |
+| `PATCH /notifications/read-all` | authenticated | Set-based mark-all-read operation. |
+| `GET/PATCH /notifications/preferences` | authenticated | Read or update per-user notification preferences. |
+| `GET /notifications/analytics?days=30` | admin | Delivery/read analytics. |
 | `GET /dashboard/reviewer/claims/{id}` | reviewer, admin | Scoped case and evidence status. |
 | `PATCH /dashboard/reviewer/claims/{id}/assignment` | reviewer, admin | Self-assign; admin sends `{"reviewer_id":7}`. |
 | `POST /dashboard/reviewer/claims/{id}/request-documents` | reviewer, admin | `{"document_types":["receipt"]}`, notify the customer. |
@@ -66,3 +70,6 @@ All paths below begin with `/api`; pass `Authorization: Bearer <access_token>`. 
 ```
 
 The examples omit other fields and chart rows. A customer can upload requested evidence and confirm OCR on `/claims/{claim_id}`; a reviewer can then resume the case. Employees retain the assigned-claims API.
+
+
+Phase 24 notification architecture and request/response examples are documented in [notifications.md](notifications.md).

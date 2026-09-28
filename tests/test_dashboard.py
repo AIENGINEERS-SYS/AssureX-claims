@@ -63,7 +63,7 @@ def test_customer_warranties_trends_and_actions(client, app, accounts, claims):
 def test_notification_ownership_and_reminders(client, app, accounts, claims):
     with app.app_context():
         warranty = db.session.get(Warranty, claims["customer"]["warranty"])
-        warranty.expiry_date = date.today() + timedelta(days=10)
+        warranty.expiry_date = date.today() + timedelta(days=7)
         other = Notification(user_id=accounts["other"], type="system", title="Private", message="Hidden")
         db.session.add(other);db.session.commit();other_id = other.id
         from backend.services.dashboard_notifications import create_warranty_reminders

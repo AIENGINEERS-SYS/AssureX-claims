@@ -5,9 +5,9 @@ from werkzeug.exceptions import Conflict, NotFound
 from backend.db.models import AuditLog, Claim, Review, RuleResult
 from backend.extensions import db
 from backend.security import role_required
+from backend.services.notifications import NotificationService
 from .common import audit, page
 from .schemas import OverrideSchema, ReviewSchema, body, claim_json
-from backend.services.dashboard_notifications import notify
 
 bp = Blueprint("review", __name__, url_prefix="/api/review")
 
@@ -60,9 +60,10 @@ def record(claim_id, decision, data=None, *, explicit_override=False):
                            decision=decision, comments=data["notes"], previous_decision=previous,
                            override_applied=explicit_override,
                            override_reason=data.get("override_reason") if explicit_override else None))
-    if decision in {"approve", "reject"}:
-        notify(claim.user_id, "claim_update", "Claim decision available",
-            f"Claim {claim.claim_id} was {claim.status}.", claim_id=claim.id)
+    if decision == "approve":
+        NotificationService().send_claim_approved(claim)
+    elif decision == "reject":
+        NotificationService().send_claim_rejected(claim, data.get("notes"))
     audit("review.override" if explicit_override else "review." + decision, claim,
           old={"automated_recommendation": previous},
           new={"status": claim.status, "human_decision": human_decision,

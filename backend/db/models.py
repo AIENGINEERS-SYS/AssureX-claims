@@ -367,23 +367,47 @@ class Review(Base):
 
 class Notification(Base):
     __tablename__ = "notifications"
+    __table_args__ = (
+        CheckConstraint("priority IN ('LOW','MEDIUM','HIGH','CRITICAL')", name="ck_notifications_priority"),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     notification_id: Mapped[str] = mapped_column(String(32), default=pid("NTF"), unique=True, nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     claim_id: Mapped[int | None] = mapped_column(ForeignKey("claims.id", ondelete="RESTRICT"), index=True)
     product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"), index=True)
     dedupe_key: Mapped[str | None] = mapped_column(String(160), unique=True)
-    type: Mapped[str] = mapped_column(String(60), nullable=False)
+    notification_type: Mapped[str] = mapped_column("type", String(60), nullable=False)
+    type = synonym("notification_type")
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
+    reference_type: Mapped[str | None] = mapped_column(String(30))
+    reference_id: Mapped[str | None] = mapped_column(String(80))
+    priority: Mapped[str] = mapped_column(String(10), default="MEDIUM", nullable=False)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     user: Mapped[User] = relationship(back_populates="notifications")
 
 
+class NotificationPreference(Timestamps, Base):
+    __tablename__ = "notification_preferences"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_notification_preferences_user"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
+    warranty_reminders: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    claim_updates: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    information_requests: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    review_notifications: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    user: Mapped[User] = relationship()
+
+
 Index("ix_notifications_user_unread", Notification.user_id, Notification.is_read)
 Index("ix_notifications_user_created", Notification.user_id, Notification.created_at)
+Index("ix_notifications_user_type_created", Notification.user_id, Notification.notification_type, Notification.created_at)
+Index("ix_notifications_user_priority_created", Notification.user_id, Notification.priority, Notification.created_at)
+Index("ix_notifications_reference", Notification.reference_type, Notification.reference_id)
+Index("ix_notifications_user_unread_created", Notification.user_id, Notification.is_read, Notification.created_at)
 Index("ix_claims_user_updated", Claim.user_id, Claim.updated_at)
 Index("ix_claims_review_queue", Claim.status, Claim.assigned_reviewer_id, Claim.submitted_at)
 Index("ix_reviews_reviewer_date", Review.reviewer_user_id, Review.reviewed_at)

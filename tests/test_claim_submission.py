@@ -7,7 +7,7 @@ import pytest
 from PIL import Image
 from pypdf import PdfWriter
 from sqlalchemy import select
-from backend.db.models import AuditLog, Claim, Document, Product
+from backend.db.models import AuditLog, Claim, Document, Notification, Product
 from backend.extensions import db
 from backend.services.claim_submission import next_claim_id
 from test_auth import app, client, accounts, claims, login, bearer
@@ -133,6 +133,8 @@ def test_submission_id_retry_immutability_and_audit(client, app, headers, claims
     assert submit(client, headers, another).json["claim"]["claim_id"].endswith("000002")
     with app.app_context():
         assert len(db.session.scalars(select(AuditLog).where(AuditLog.action == "claim.submit")).all()) == 2
+        assert len(db.session.scalars(select(Notification).where(
+            Notification.notification_type == "CLAIM_SUBMITTED")).all()) == 2
         assert db.session.get(Claim, claim["id"]).status == "submitted"  # Keep employee state machine compatible.
 
 

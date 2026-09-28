@@ -31,6 +31,17 @@ def _boolean(name, default=False):
     return value.lower() == "true"
 
 
+def _integer_list(name, default):
+    raw = os.getenv(name, default)
+    try:
+        values = tuple(dict.fromkeys(int(item.strip()) for item in raw.split(",") if item.strip()))
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be a comma-separated list of whole numbers") from exc
+    if not values or any(value <= 0 or value > 3650 for value in values):
+        raise RuntimeError(f"{name} values must be between 1 and 3650 days")
+    return values
+
+
 def settings():
     environment = os.getenv("ASSUREX_ENV", "development")
     url = make_url(database_url())
@@ -62,6 +73,7 @@ def settings():
         "JWT_REFRESH_TOKEN_EXPIRES": timedelta(days=7),
         "BCRYPT_LOG_ROUNDS": 12,
         "WARRANTY_NEAR_EXPIRY_DAYS": _integer("WARRANTY_NEAR_EXPIRY_DAYS", 30),
+        "WARRANTY_NOTIFICATION_THRESHOLDS": _integer_list("WARRANTY_NOTIFICATION_THRESHOLDS", "90,60,30,7"),
         "DASHBOARD_DISAGREEMENT_GAP": _decimal("DASHBOARD_DISAGREEMENT_GAP", 0.20),
         "MODEL_STRONG_CONFIDENCE": _decimal("MODEL_STRONG_CONFIDENCE", 0.80),
         "MODEL_ACCEPTABLE_CONFIDENCE": _decimal("MODEL_ACCEPTABLE_CONFIDENCE", 0.65),
@@ -121,6 +133,9 @@ def validate_config(app):
         raise RuntimeError("OCR_TIMEOUT_SECONDS must be between 1 and 300")
     if not 0 <= app.config["WARRANTY_NEAR_EXPIRY_DAYS"] <= 365:
         raise RuntimeError("WARRANTY_NEAR_EXPIRY_DAYS must be between 0 and 365")
+    thresholds = app.config["WARRANTY_NOTIFICATION_THRESHOLDS"]
+    if not thresholds or any(type(value) is not int or value <= 0 or value > 3650 for value in thresholds):
+        raise RuntimeError("WARRANTY_NOTIFICATION_THRESHOLDS must contain day values between 1 and 3650")
     if not 0 <= app.config["DASHBOARD_DISAGREEMENT_GAP"] <= 1:
         raise RuntimeError("DASHBOARD_DISAGREEMENT_GAP must be between 0 and 1")
     probability_settings = (

@@ -10,7 +10,7 @@ from backend.extensions import db, limiter
 from backend.security import role_required
 from backend.services.dashboard import (WINDOWS, admin_dashboard, customer_dashboard, duplicate_pairs,
     model_history, review_scope, reviewer_dashboard, trends)
-from backend.services.dashboard_notifications import notify, serialize
+from backend.services.notifications import NotificationService, notification_json
 from .claim_schemas import DOCUMENT_TYPES
 from .common import audit
 
@@ -100,13 +100,14 @@ def trends_endpoint():
 @bp.get("/notifications")
 @role_required("customer", "employee", "reviewer")
 def notifications():
-    query = select(Notification).where(Notification.user_id == current_user.id)
+    query = select(Notification).where(
+        Notification.user_id == current_user.id, Notification.deleted_at.is_(None))
     if request.args.get("unread") == "true":
         query = query.where(Notification.is_read.is_(False))
     page, per_page = pagination()
     result = db.paginate(query.order_by(Notification.created_at.desc(), Notification.id.desc()),
         page=page, per_page=per_page, error_out=False)
-    return {"items": [serialize(item) for item in result.items], "page": page,
+    return {"items": [notification_json(item) for item in result.items], "page": page,
         "per_page": per_page, "total": result.total, "pages": result.pages}
 
 
@@ -117,11 +118,13 @@ def mark_read(notification_id):
         Notification.user_id == current_user.id).with_for_update())
     if item is None:
         raise NotFound("Notification not found.")
+    if item.deleted_at is not None:
+        raise NotFound("Notification not found.")
     if not item.is_read:
         item.is_read, item.read_at = True, utcnow()
         audit("notification.read", item)
         db.session.commit()
-    return {"notification": serialize(item)}
+    return {"notification": notification_json(item)}
 
 
 def visible_claim(claim_id, lock=False, include_info=False):
@@ -191,6 +194,8 @@ def assign(claim_id):
         reviewer_id = current_user.id
     old = claim.assigned_reviewer_id
     claim.assigned_reviewer_id = reviewer_id
+    if reviewer_id != old:
+        NotificationService().send_review_assignment(claim, reviewer_id)
     audit("review.assign", claim, old={"reviewer_id": old}, new={"reviewer_id": reviewer_id}, claim_id=claim.id)
     db.session.commit()
     return {"claim_id": claim.id, "assigned_reviewer_id": reviewer_id}
@@ -209,8 +214,7 @@ def request_documents(claim_id):
         claim.assigned_reviewer_id = current_user.id
     db.session.add(Review(claim_id=claim.id, reviewer_user_id=current_user.id,
         decision="request_information", comments="Requested documents: " + ", ".join(types)))
-    notify(claim.user_id, "document_request", "More documents needed",
-        f"Please add {', '.join(types)} to claim {claim.claim_id}.", claim_id=claim.id)
+    NotificationService().send_information_requested(claim, types)
     audit("review.documents_requested", claim, new={"document_types": types}, claim_id=claim.id)
     db.session.commit()
     return {"claim_id": claim.id, "status": claim.status, "requested": types}
@@ -223,8 +227,7 @@ def remind(claim_id):
     claim = visible_claim(claim_id, include_info=True)
     if claim.status != "additional_information_required":
         raise BadRequest("This claim is not awaiting information.")
-    notify(claim.user_id, "reviewer_reminder", "Claim information reminder",
-        f"Please provide the requested information for claim {claim.claim_id}.", claim_id=claim.id)
+    NotificationService().send_information_requested(claim, reminder=True)
     audit("review.reminder", claim, claim_id=claim.id)
     db.session.commit()
     return {"message": "Reminder sent."}
@@ -237,6 +240,7 @@ def resume(claim_id):
     if claim.status != "additional_information_required":
         raise BadRequest("This claim is not awaiting information.")
     claim.status, claim.manual_review_required = "manual_review", True
+    NotificationService().send_review_notification(claim)
     audit("review.resumed", claim, new={"status": claim.status}, claim_id=claim.id)
     db.session.commit()
     return {"claim_id": claim.id, "status": claim.status}

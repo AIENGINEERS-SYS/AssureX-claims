@@ -9,14 +9,15 @@ from werkzeug.exceptions import BadRequest, NotFound
 from backend.db.models import Claim, Product, utcnow
 from backend.extensions import db
 from backend.services.claim_storage import storage
+from backend.services.document_service import completeness
+from backend.services.notifications import NotificationService
 from backend.services.claim_submission import (apply_draft, customer_only, document_json, lock_draft,
     next_claim_id, owned_claim, validation_errors, workflow_json)
 from backend.services.products import product_json
 from backend.services.warranty_calculations import current_date
-from .claim_schemas import DraftSchema, DraftUpdateSchema, SubmitSchema, UploadSchema
+from .claim_schemas import DraftSchema, DraftUpdateSchema, REQUIRED_DOCUMENTS, SubmitSchema, UploadSchema
 from .common import audit, page
 from .schemas import body
-from backend.services.dashboard_notifications import notify
 
 bp = Blueprint("claim_workflow", __name__, url_prefix="/api")
 
@@ -103,6 +104,14 @@ def submit():
     lock_draft(claim, data["version"])
     errors = validation_errors(claim, verify_files=True)
     if errors:
+        missing = completeness(claim, REQUIRED_DOCUMENTS)["missing"]
+        if missing:
+            # Persist the actionable alert without committing the optimistic-lock
+            # version bump made by lock_draft().
+            db.session.rollback()
+            claim = owned_claim(data["draft_id"])
+            NotificationService().send_missing_document_alert(claim, missing)
+            db.session.commit()
         raise ValidationError(errors)
     now = utcnow()
     claim.claim_id = next_claim_id(now.year)
@@ -111,8 +120,7 @@ def submit():
         or document.cross_claim_duplicate for document in claim.documents)
     claim.current_step = 4
     audit("claim.submit", claim, new={"claim_id": claim.claim_id, "status": "SUBMITTED"}, claim_id=claim.id)
-    notify(claim.user_id, "claim_update", "Claim submitted",
-        f"Claim {claim.claim_id} was submitted successfully.", claim_id=claim.id)
+    NotificationService().send_claim_submitted(claim)
     db.session.commit()
     return {"claim": workflow_json(claim)}, 201
 

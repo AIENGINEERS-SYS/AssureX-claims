@@ -1,6 +1,6 @@
 # AssureX Phase 3 API
 
-Phase 4 product/warranty routes and request examples are documented in the [product API reference](products.md#api). The browser interface is available at `/products`.
+Phase 4 product/warranty routes and request examples are documented in the [product API reference](products.md#api). Phase 24 notification endpoints, preferences, analytics, and scheduler behavior are documented in [notifications.md](notifications.md). The browser interfaces are available at `/products` and `/dashboard`.
 
 Base URL for local development: `http://127.0.0.1:5000`. Send `Content-Type: application/json` for JSON bodies and `Authorization: Bearer <access_token>` for protected requests. Refresh takes a refresh token; logout accepts either type. Path `{id}` and product/warranty fields use integer database IDs. Public prefixed IDs are also returned for display.
 
@@ -31,6 +31,14 @@ Base URL for local development: `http://127.0.0.1:5000`. Send `Content-Type: app
 | `DELETE /api/admin/users/{id}` | Fresh admin | Deactivates account, preserves records; 200 |
 | `GET /api/admin/claims` | Admin | All claims; paginated |
 | `GET /api/admin/analytics` | Admin | User counts and claim counts by status; 200 |
+| `GET /api/notifications` | Authenticated | Own notifications with filters, search and pagination |
+| `GET /api/notifications/unread` | Authenticated | Efficient unread count and recent unread notices |
+| `GET /api/notifications/{id}` | Owner | Single owned notification |
+| `PATCH /api/notifications/{id}/read` | Owner | Mark one owned notification read |
+| `PATCH /api/notifications/read-all` | Authenticated | Mark all owned notifications read |
+| `DELETE /api/notifications/{id}` | Owner | Soft-delete one owned notification |
+| `GET/PATCH /api/notifications/preferences` | Authenticated | Read/update notification preferences |
+| `GET /api/notifications/analytics` | Admin | Sent/read/read-rate/type/priority analytics |
 
 Roles: `customer`, `employee`, `reviewer`, `admin`. Lists accept `page` (default 1) and `per_page` (default 20, maximum 100) and return `{ "items": [], "page": 1, "per_page": 20, "total": 0 }`. Unknown JSON fields are rejected. Dates use `YYYY-MM-DD`; fault dates cannot be in the future. Notes must be nonblank and at most 10,000 characters.
 

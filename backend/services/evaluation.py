@@ -7,6 +7,7 @@ from .claim_rules import ClaimRuleEngine
 from .decision_engine import DecisionEngine
 from .duplicate_detection import DuplicateDetectionService
 from .model_comparison import ModelComparisonService
+from .notifications import NotificationService
 from .predictions import GTMPredictionService, PredictionError, PythonPredictionService
 from .warranty_policy import PolicyConfigurationError, WarrantyPolicy, WarrantyPolicyService
 
@@ -82,9 +83,12 @@ class ClaimEvaluationService:
             duplicate_finding=duplicate, contradictions=contradictions, explanation=explanation,
             model_errors=errors, policy_code=policy.code, policy_version=policy.version)
         db.session.add(item)
+        previous_status = claim.status
         claim.final_decision = recommendation
         if recommendation == "manual_review_required":
             claim.status, claim.manual_review_required = "manual_review", True
+            if previous_status != "manual_review":
+                NotificationService().send_review_notification(claim)
         elif claim.status == "submitted":
             claim.status = "under_evaluation"
         db.session.flush()

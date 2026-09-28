@@ -1,8 +1,8 @@
 import React, {Suspense, useEffect, useState} from 'react';
 import {BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams} from 'react-router-dom';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {Bell, Box, ChevronRight, ClipboardList, FileText, LayoutDashboard, LogOut,
-  Plus, Search, Shield, ShieldAlert, Users} from 'lucide-react';
+import {Bell, Box, CheckCheck, ChevronRight, ClipboardList, FileText, LayoutDashboard, LogOut,
+  Plus, Search, Shield, ShieldAlert, Trash2, Users} from 'lucide-react';
 import {api, errorMessage, getSession, onExpired, setSession} from '../claims/api';
 
 const Chart = React.lazy(() => import('./Charts'));
@@ -33,17 +33,104 @@ function QueryState({result, children}) {if (result.isPending) return <div class
 function Distribution({values, type = 'pie'}) {return <Suspense fallback={<div className="loading">Loading chart...</div>}><Chart variant="distribution" values={values} type={type}/></Suspense>;}
 function Timeline({series, keys, type = 'line'}) {return <Suspense fallback={<div className="loading">Loading chart...</div>}><Chart variant="timeline" series={series} keys={keys} type={type}/></Suspense>;}
 
-function NoticeList({compact = false}) {
+function notificationTone(item) {
+  if (item.priority === 'CRITICAL' || item.notification_type === 'CLAIM_REJECTED') return 'red';
+  if (item.priority === 'HIGH') return 'amber';
+  if (item.notification_type === 'CLAIM_APPROVED') return 'green';
+  return 'blue';
+}
+
+function NoticeList({compact = false, filters = {}, onChanged}) {
   const client = useQueryClient(), [page, setPage] = useState(1);
-  const result = query('notifications', '/dashboard/notifications', {page, per_page: compact ? 4 : 15});
-  const mark = useMutation({mutationFn: id => api.patch(`/dashboard/notifications/${id}/read`),
-    onSuccess: () => {client.invalidateQueries({queryKey: ['notifications']});client.invalidateQueries({queryKey: ['customer']});}});
-  return <QueryState result={result}>{data => <>{data.items.length ? data.items.map(item => <div className="list-row" key={item.id}>
+  useEffect(() => setPage(1), [filters.type, filters.priority, filters.is_read, filters.search, filters.from, filters.to]);
+  const params = {page, per_page: compact ? 4 : 15, ...filters};
+  const result = query('notifications', '/notifications', params);
+  const refresh = () => {
+    client.invalidateQueries({queryKey: ['notifications']});
+    client.invalidateQueries({queryKey: ['notifications-unread']});
+    client.invalidateQueries({queryKey: ['customer']});
+    onChanged?.();
+  };
+  const mark = useMutation({mutationFn: id => api.patch(`/notifications/${id}/read`), onSuccess: refresh});
+  const remove = useMutation({mutationFn: id => api.delete(`/notifications/${id}`), onSuccess: refresh});
+  return <QueryState result={result}>{data => <>{data.items.length ? data.items.map(item => <div className={`list-row notification-row ${item.is_read ? '' : 'unread'}`} key={item.id}>
     <div className="row-main"><strong>{!item.is_read && <Badge tone="blue">New</Badge>} {item.title}</strong>
-      <span className="muted">{item.message}</span><small>{date(item.created_at)}</small></div>
+      <span className="muted">{item.message}</span><small><Tone status={item.priority}/> {date(item.created_at)}</small></div>
     <div className="row-actions">{item.href && <a href={item.href} className="text-button">Open</a>}
-      {!item.is_read && <button className="text-button" disabled={mark.isPending} onClick={() => mark.mutate(item.id)}>Mark read</button>}</div>
-  </div>) : <Empty message="No notifications yet."/>}<Pager meta={data} onPage={setPage}/></>}</QueryState>;
+      {!item.is_read && <button className="text-button" disabled={mark.isPending} onClick={() => mark.mutate(item.id)}>Mark read</button>}
+      {!compact && <button className="icon-action" aria-label={`Delete ${item.title}`} disabled={remove.isPending} onClick={() => remove.mutate(item.id)}><Trash2 size={15}/></button>}</div>
+  </div>) : <Empty message="No notifications match these filters."/>}<Pager meta={data} onPage={setPage}/></>}</QueryState>;
+}
+
+function NotificationBell() {
+  const [open, setOpen] = useState(false), client = useQueryClient();
+  const result = useQuery({queryKey: ['notifications-unread'], queryFn: async () => (await api.get('/notifications/unread', {params: {limit: 5}})).data,
+    staleTime: 10000, refetchInterval: 15000, refetchOnWindowFocus: true});
+  const mark = useMutation({mutationFn: id => api.patch(`/notifications/${id}/read`), onSuccess: () => {
+    client.invalidateQueries({queryKey: ['notifications-unread']});client.invalidateQueries({queryKey: ['notifications']});
+  }});
+  const items = result.data?.items || [], count = result.data?.count || 0;
+  return <div className="notification-bell">
+    <button className="bell-button" aria-label={`${count} unread notifications`} aria-expanded={open} onClick={() => setOpen(value => !value)}>
+      <Bell size={18}/>{count > 0 && <span className="unread-badge">{count > 99 ? '99+' : count}</span>}
+    </button>
+    {open && <div className="notification-dropdown" role="dialog" aria-label="Recent notifications">
+      <div className="notification-dropdown-head"><strong>Notifications</strong><Link to="/notifications" onClick={() => setOpen(false)}>View all</Link></div>
+      {result.isPending ? <div className="empty">Loading notifications...</div> : items.length ? items.map(item =>
+        <div className="dropdown-notice" key={item.id}><span className={`priority-dot ${notificationTone(item)}`} aria-hidden="true"/><div><strong>{item.title}</strong><p>{item.message}</p><small>{date(item.created_at)}</small></div>
+          {!item.is_read && <button aria-label={`Mark ${item.title} read`} onClick={() => mark.mutate(item.id)}><CheckCheck size={15}/></button>}</div>)
+        : <Empty message="You're all caught up."/>}
+      <Link className="dropdown-footer" to="/notifications" onClick={() => setOpen(false)}>Open notification center</Link>
+    </div>}
+  </div>;
+}
+
+function NotificationPreferences() {
+  const client = useQueryClient(), result = query('notification-preferences', '/notifications/preferences');
+  const mutation = useMutation({mutationFn: values => api.patch('/notifications/preferences', values),
+    onSuccess: () => client.invalidateQueries({queryKey: ['notification-preferences']})});
+  const labels = {
+    warranty_reminders: 'Warranty reminders',
+    claim_updates: 'Claim status updates',
+    information_requests: 'Information requests',
+    review_notifications: 'Review notifications',
+  };
+  return <QueryState result={result}>{data => <div className="preference-grid">{Object.entries(labels).map(([key, text]) =>
+    <label className="preference-toggle" key={key}><span><strong>{text}</strong><small>In-app notifications</small></span>
+      <input type="checkbox" checked={Boolean(data.preferences[key])} disabled={mutation.isPending}
+        onChange={event => mutation.mutate({[key]: event.target.checked})}/></label>)}</div>}</QueryState>;
+}
+
+function NotificationCenter({role}) {
+  const client = useQueryClient();
+  const [filters, setFilters] = useState({type: '', priority: '', is_read: '', search: '', from: '', to: ''});
+  const markAll = useMutation({mutationFn: () => api.patch('/notifications/read-all'), onSuccess: () => {
+    client.invalidateQueries({queryKey: ['notifications']});client.invalidateQueries({queryKey: ['notifications-unread']});client.invalidateQueries({queryKey: ['customer']});
+  }});
+  const update = event => setFilters(current => ({...current, [event.target.name]: event.target.value}));
+  return <><div className="page-head"><div><span className="eyebrow">Notification center</span><h1>Updates that need your attention.</h1>
+    <p>Filter claim, warranty, and review events without exposing another user's notices.</p></div>
+    <button className="outline-button" disabled={markAll.isPending} onClick={() => markAll.mutate()}><CheckCheck size={16}/> Mark all read</button></div>
+    <Panel title="Notifications" caption="Your account activity only"><div className="notification-filters">
+      <label>Search<input name="search" type="search" value={filters.search} onChange={update} placeholder="Claim ID or notification text"/></label>
+      <label>Type<select name="type" value={filters.type} onChange={update}><option value="">All types</option>{['WARRANTY_EXPIRY','MISSING_DOCUMENTS','CLAIM_SUBMITTED','INFO_REQUESTED','CLAIM_IN_REVIEW','CLAIM_APPROVED','CLAIM_REJECTED'].map(value => <option key={value} value={value}>{label(value)}</option>)}</select></label>
+      <label>Priority<select name="priority" value={filters.priority} onChange={update}><option value="">All priorities</option>{['LOW','MEDIUM','HIGH','CRITICAL'].map(value => <option key={value}>{value}</option>)}</select></label>
+      <label>Read status<select name="is_read" value={filters.is_read} onChange={update}><option value="">All</option><option value="false">Unread</option><option value="true">Read</option></select></label>
+      <label>From<input name="from" type="date" value={filters.from} onChange={update}/></label>
+      <label>To<input name="to" type="date" value={filters.to} onChange={update}/></label>
+    </div><NoticeList filters={filters}/></Panel>
+    <div className="two-col notification-settings"><Panel title="Notification preferences" caption="Choose the in-app events you want to receive"><NotificationPreferences/></Panel>
+      {role === 'admin' ? <Panel title="Platform notification analytics" caption="Delivery and read behavior"><NotificationAnalytics/></Panel> :
+        <Panel title="How notifications work" caption="Built for more channels later"><div className="empty">In-app delivery is active now. Email, SMS, and push can be added without changing claim workflow events.</div></Panel>}</div></>;
+}
+
+function NotificationAnalytics() {
+  const result = query('notification-analytics', '/notifications/analytics', {days: 30});
+  return <QueryState result={result}>{data => <div className="mini-list">
+    <span><strong>{data.notifications_sent}</strong> sent</span><span><strong>{data.notifications_read}</strong> read</span>
+    <span><strong>{data.read_rate}%</strong> read rate</span><span><strong>{data.average_time_to_read_seconds == null ? '-' : `${Math.round(data.average_time_to_read_seconds / 60)}m`}</strong> avg. read time</span>
+    <span><strong>{label(data.most_common_notification_type || '-')}</strong> most common</span>
+  </div>}</QueryState>;
 }
 
 function Customer({adminView = false}) {
@@ -185,6 +272,8 @@ function Admin() {
       <Panel title="AI model monitoring" caption="Current and historical evaluation metrics"><ModelHistory/></Panel></div>
     <div className="two-col"><Panel title="Model confidence distribution"><Distribution values={data.charts.confidence_distribution} type="bar"/></Panel>
       <Panel title="Customer growth"><QueryState result={period}>{trend => <Timeline series={trend.series} keys={['customers']}/>}</QueryState></Panel></div>
+    <div className="two-col"><Panel title="Notification statistics" caption="Last 30 days"><NotificationAnalytics/></Panel>
+      <Panel title="System alerts" caption="Notification delivery health"><div className="empty">In-app notification delivery is active. Delivery failures from future email, SMS, and push channels can surface here.</div></Panel></div>
     <div className="two-col"><Panel title="Warranty expirations"><QueryState result={period}>{trend => <Timeline series={trend.series} keys={['warranty_expirations']}/>}</QueryState></Panel></div></>}</QueryState>;
 }
 
@@ -208,15 +297,15 @@ function Shell({user, signOut, children}) {
     ...(role === 'customer' ? [{href: '/products', title: 'My products', icon: Box}, {href: '/claims', title: 'Claims', icon: ClipboardList}] : []),
     ...(role === 'reviewer' ? [{href: '#queue', title: 'Review queue', icon: ClipboardList}] : []),
     ...(role === 'admin' ? [{href: '/dashboard/reviewer', title: 'Reviewer workspace', icon: ShieldAlert}] : []),
-    {href: '#notifications', title: 'Notifications', icon: Bell}];
+    {href: '/dashboard/notifications', title: 'Notifications', icon: Bell}];
   return <div className="shell"><a className="skip-link" href="#main">Skip to content</a><aside className="sidebar" aria-label="Sidebar"><Link className="brand" to={home.slice('/dashboard'.length)}><span className="brand-mark">AX</span>AssureX</Link>
     <nav aria-label="Main navigation">{links.map(({href,title,icon: Icon}, i) => href.startsWith('/dashboard/') ?
       <Link key={`${href}-${i}`} to={href.slice('/dashboard'.length)} className="nav-link" aria-current={location.pathname === href.slice('/dashboard'.length) ? 'page' : undefined}><Icon size={18}/>{title}</Link> :
       <a key={`${href}-${i}`} href={href} className="nav-link"><Icon size={18}/>{title}</a>)}</nav>
     <button className="nav-link signout" onClick={signOut}><LogOut size={18}/>Sign out</button></aside>
-    <div className="workspace"><header className="topbar"><small>ASSUREX / {label(role)} WORKSPACE</small><div className="account"><a href="#notifications" aria-label="Notifications"><Bell size={18}/></a>
+    <div className="workspace"><header className="topbar"><small>ASSUREX / {label(role)} WORKSPACE</small><div className="account"><NotificationBell/>
       <span className="avatar" aria-hidden="true">{(user.full_name || user.email).split(' ').map(p => p[0]).join('').slice(0,2).toUpperCase()}</span><span>{user.full_name}</span></div></header>
-      <main id="main" className="content">{children}<section id="notifications" className="notifications"><Panel title="Notification center" caption="Updates and requests linked to your account"><NoticeList/></Panel></section></main></div></div>;
+      <main id="main" className="content">{children}</main></div></div>;
 }
 
 function DashboardApp() {
@@ -229,6 +318,7 @@ function DashboardApp() {
     <Route path="/customer" element={['customer','admin'].includes(user.role) ? <Customer adminView={user.role === 'admin'}/> : <Navigate to={home} replace/>}/>
     <Route path="/reviewer" element={['reviewer','admin'].includes(user.role) ? <Reviewer role={user.role}/> : <Navigate to={home} replace/>}/>
     <Route path="/admin" element={user.role === 'admin' ? <Admin/> : <Navigate to={home} replace/>}/>
+    <Route path="/notifications" element={<NotificationCenter role={user.role}/>}/>
     <Route path="*" element={<Navigate to={home} replace/>}/></Routes></Shell>;
 }
 
