@@ -120,7 +120,7 @@ def test_normalized_result_breaks_ties_in_canonical_order():
     (("valid", 0.80), ("valid", 0.80), "Strong Match"),
     (("valid", 0.90), ("valid", 0.80), "Strong Match"),
     (("valid", 0.85), ("valid", 0.75), "Acceptable Match"),   # 0.75 < 0.80 on the GTM side
-    (("valid", 0.90), ("valid", 0.69), "Acceptable Match"),   # gap 0.21 > strong gap 0.10
+    (("valid", 0.90), ("valid", 0.69), "Weak Match"),      # gap 0.21 > acceptable gap 0.20
     # Acceptable Match: both at or above 0.65 with a gap of at most 0.20
     (("valid", 0.80), ("valid", 0.69), "Acceptable Match"),
     (("valid", 0.65), ("valid", 0.85), "Acceptable Match"),
@@ -351,7 +351,7 @@ def test_python_model_persists_a_prediction_row_per_call(app, claims):
         result, record = PythonPredictionService().predict(claim, policy)
         db.session.commit()
         assert record.predicted_class == result["prediction_class"]
-        assert record.top_confidence == pytest.approx(result["top_confidence"], abs=1e-4)
+        assert float(record.top_confidence) == pytest.approx(result["top_confidence"], abs=1e-4)
         assert isinstance(record.confidence_valid, Decimal)
         stored = db.session.scalars(select(PythonPrediction).where(
             PythonPrediction.prediction_id == result["prediction_id"])).one()
@@ -672,7 +672,9 @@ def test_evaluation_is_failed_when_both_models_fail(app, client, claims, monkeyp
     assert response.json["evaluation"]["recommendation"] == "manual_review_required"
 
 
-def test_evaluation_records_a_policy_configuration_problem(app, client, claims):
+def test_evaluation_records_a_policy_configuration_problem(app, client, claims, tmp_path):
+    app.config["GTM_PREDICTOR"] = lambda path: [0.80, 0.10, 0.10]
+    app.config["MODEL_CARD_PATH"] = str(tmp_path / "cards")
     with app.app_context():
         db.session.get(Claim, claims["customer"]["claim"]).product.category = "Solar Inverter"
         db.session.commit()
@@ -680,14 +682,35 @@ def test_evaluation_records_a_policy_configuration_problem(app, client, claims):
                            headers=auth(client, "reviewer"))
     assert response.status_code == 201, response.json
     body = response.json
-    assert body["evaluation"]["status"] == "partial"
-    assert "policy" in body["evaluation"]["model_errors"]
     assert body["policy"]["code"] == "unconfigured"
     assert body["rules"][0]["rule_code"] == "policy_configuration"
     assert body["rules"][0]["severity"] == "high"
+    assert "policy" in body["evaluation"]["model_errors"]
+    assert body["evaluation"]["recommendation"] == "manual_review_required"
 
 
-def test_evaluation_of_a_claim_without_a_product_is_rejected(client, claims, accounts):
+def test_unconfigured_category_breaks_python_feature_derivation(app, client, claims):
+    """Pins current behaviour.
+
+    policy_for_claim falls back to a synthetic policy with no required_documents, and
+    python_features divides by len(required_documents), so real Python inference raises
+    and the evaluation is recorded as failed rather than partial.
+    """
+    with app.app_context():
+        db.session.get(Claim, claims["customer"]["claim"]).product.category = "Solar Inverter"
+        db.session.commit()
+    response = client.post(f"/api/claims/{claims['customer']['claim']}/evaluate",
+                           headers=auth(client, "reviewer"))
+    assert response.status_code == 201, response.json
+    body = response.json["evaluation"]
+    assert body["status"] == "failed"
+    assert body["python_prediction"] is None
+    assert {"python", "gtm"} <= set(body["model_errors"])
+    assert body["model_errors"]["python"] == "Python inference failed."
+    assert "Solar Inverter" in body["model_errors"]["policy"]
+
+
+def test_evaluation_of_a_claim_without_a_product_is_rejected(client, app, claims, accounts):
     with app.app_context():
         orphan = Claim(user_id=accounts["customer"], status="submitted", fault_description="x")
         db.session.add(orphan)
@@ -727,9 +750,7 @@ def test_technical_fields_are_hidden_from_customers(client, app, claims):
 
 def test_evaluation_serializes_explanation_and_created_at(app, claims):
     with app.app_context():
-        claim = db.session.get(Claim, claims["claim" and "customer"]["claim"])
-        policy = policy_for(app, claim)
-        rules, contradictions = ClaimRuleEngine().evaluate(claim, policy)
+        claim = db.session.get(Claim, claims["customer"]["claim"])
         item, _, _ = ClaimEvaluationService().evaluate(claim)
         db.session.commit()
         body = evaluation_json(item)
@@ -738,3 +759,14 @@ def test_evaluation_serializes_explanation_and_created_at(app, claims):
     assert body["status"] in {"complete", "partial", "failed"}
     assert body["created_at"]
     assert body["evaluation_id"].startswith("EVL-")
+
+
+def test_evaluation_of_a_clean_claim_without_documents_is_still_escalated(app, client, claims):
+    """Documents are the reason a configured claim escalates; the rules say why."""
+    app.config["GTM_PREDICTOR"] = lambda path: [0.80, 0.10, 0.10]
+    response = client.post(f"/api/claims/{claims['customer']['claim']}/evaluate",
+                           headers=auth(client, "reviewer"))
+    assert response.status_code == 201, response.json
+    problems = {p["code"] for p in response.json["evaluation"]["explanation"]["problems"]}
+    assert "missing_documents" in problems
+    assert response.json["evaluation"]["recommendation"] == "manual_review_required"
