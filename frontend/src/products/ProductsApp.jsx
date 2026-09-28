@@ -1,5 +1,5 @@
-import React, {useEffect, useMemo, useState} from 'react';
-import {BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useParams} from 'react-router-dom';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useParams} from 'react-router-dom';
 import {Box, Check, ChevronLeft, ChevronRight, LogIn, LogOut, PackagePlus, Pencil, Plus, ShieldCheck, Trash2} from 'lucide-react';
 import {api, errorMessage, getSession, setSession} from '../claims/api';
 import './products.css';
@@ -8,6 +8,7 @@ const productFields = ['name', 'brand', 'category', 'model_number', 'serial_numb
 const emptyProduct = {name: '', brand: '', category: '', model_number: '', serial_number: '', purchase_date: '',
   purchase_price: '', retailer: '', warranty_duration: 12, warranty_duration_unit: 'months', warranty_provider: '',
   warranty_start_date: '', coverage: '', exclusions: '', service_center_conditions: ''};
+const canceled = error => error?.code === 'ERR_CANCELED';
 
 function formatDate(value) {
   if (!value) return 'Not specified';
@@ -45,6 +46,9 @@ function Auth({onAuth}) {
       if (mode === 'register') await api.post('/auth/register', values);
       const {data} = await api.post('/auth/login', {email: values.email, password: values.password});
       if (!['customer', 'admin'].includes(data.user.role)) {
+        setSession(data);
+        try {await api.post('/auth/logout');} catch {/* The local session must still be cleared. */}
+        finally {setSession(null);}
         throw new Error('Product management is available to customer and administrator accounts.');
       }
       setSession(data);
@@ -65,7 +69,7 @@ function Auth({onAuth}) {
       <label>Email address<input name="email" type="email" autoComplete="username" required maxLength="320" /></label>
       <label>Password<input name="password" type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} required minLength={mode === 'register' ? 12 : 1} /></label>
       <ErrorBox error={error} />
-      <button id="auth-submit" className="button full-width" disabled={busy}><LogIn size={16} />{busy ? 'Signing in...' : mode === 'register' ? 'Create account' : 'Sign in'}</button>
+      <button id="auth-submit" type="submit" className="button full-width" disabled={busy}><LogIn size={16} />{busy ? 'Signing in...' : mode === 'register' ? 'Create account' : 'Sign in'}</button>
     </form>
     <p className="auth-toggle">{mode === 'register' ? 'Already have an account?' : 'New to AssureX?'}{' '}
       <button type="button" className="text-button" onClick={() => {setMode(mode === 'register' ? 'login' : 'register');setError('');}}>
@@ -105,12 +109,24 @@ function ProductList({user}) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    let active = true, controller;
+    const refresh = () => {
+      if (document.visibilityState === 'hidden') return;
+      controller?.abort();
+      controller = new AbortController();
       setError('');
-      api.get('/products', {params: {...filters, per_page: 10}}).then(response => setData(response.data))
-        .catch(requestError => setError(errorMessage(requestError)));
-    }, filters.q ? 300 : 0);
-    return () => clearTimeout(timer);
+      const params = Object.fromEntries(Object.entries({...filters, per_page: 10}).filter(([, value]) => value !== ''));
+      api.get('/products', {params, signal: controller.signal})
+        .then(response => {if (active) setData(response.data);})
+        .catch(requestError => {if (active && !canceled(requestError)) setError(errorMessage(requestError));});
+    };
+    const timer = setTimeout(refresh, filters.q ? 300 : 0);
+    const interval = setInterval(refresh, 60000);
+    const visible = () => {if (document.visibilityState === 'visible') refresh();};
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', visible);
+    return () => {active = false;clearTimeout(timer);clearInterval(interval);controller?.abort();
+      window.removeEventListener('focus', refresh);document.removeEventListener('visibilitychange', visible);};
   }, [filters]);
 
   function change(name, value) {
@@ -149,8 +165,11 @@ function ProductForm({edit = false}) {
 
   useEffect(() => {
     if (!edit) return;
-    api.get(`/products/${productId}`).then(({data}) => setValues(current => ({...current, ...Object.fromEntries(productFields.map(key => [key, data.product[key] ?? '']))})))
-      .catch(requestError => setError(errorMessage(requestError))).finally(() => setBusy(false));
+    const controller = new AbortController();
+    api.get(`/products/${productId}`, {signal: controller.signal}).then(({data}) => setValues(current => ({...current, ...Object.fromEntries(productFields.map(key => [key, data.product[key] ?? '']))})))
+      .catch(requestError => {if (!canceled(requestError)) setError(errorMessage(requestError));})
+      .finally(() => {if (!controller.signal.aborted) setBusy(false);});
+    return () => controller.abort();
   }, [edit, productId]);
 
   useEffect(() => {
@@ -158,9 +177,11 @@ function ProductForm({edit = false}) {
     const start_date = values.warranty_start_date || values.purchase_date;
     const duration = Number(values.warranty_duration);
     if (!start_date || !Number.isInteger(duration) || duration < 1) {setPreview('Enter a valid date and duration');return;}
-    const timer = setTimeout(() => api.post('/warranties/preview', {start_date, duration, duration_unit: values.warranty_duration_unit})
-      .then(({data}) => setPreview(formatDate(data.expiry_date))).catch(requestError => setPreview(errorMessage(requestError))), 250);
-    return () => clearTimeout(timer);
+    const controller = new AbortController();
+    const timer = setTimeout(() => api.post('/warranties/preview', {start_date, duration, duration_unit: values.warranty_duration_unit}, {signal: controller.signal})
+      .then(({data}) => setPreview(formatDate(data.expiry_date)))
+      .catch(requestError => {if (!canceled(requestError)) setPreview(errorMessage(requestError));}), 250);
+    return () => {clearTimeout(timer);controller.abort();};
   }, [edit, values.purchase_date, values.warranty_start_date, values.warranty_duration, values.warranty_duration_unit]);
 
   function update(event) {setValues(current => ({...current, [event.target.name]: event.target.value}));}
@@ -173,7 +194,7 @@ function ProductForm({edit = false}) {
     if (!edit && values.warranty_start_date) payload.warranty_start_date = values.warranty_start_date;
     try {
       const {data} = edit ? await api.put(`/products/${productId}`, payload) : await api.post('/products', payload);
-      navigate(`/${data.product.id}`, {replace: true});
+      navigate(`/${data.product.id}`, {replace: true, state: {notice: data.message}});
     } catch (requestError) {setError(errorMessage(requestError));} finally {setBusy(false);}
   }
 
@@ -192,7 +213,7 @@ function ProductForm({edit = false}) {
         <TextArea label="Coverage (optional)" name="coverage" value={values.coverage} onChange={update} /><TextArea label="Exclusions (optional, one per line)" name="exclusions" value={values.exclusions} onChange={update} /><TextArea label="Service-center conditions (optional)" name="service_center_conditions" value={values.service_center_conditions} onChange={update} /></div>
         <div className="calculation"><span>Calculated warranty expiry</span><strong id="expiry-preview">{preview}</strong></div></FormSection>}
       <div className="form-section"><ErrorBox error={error} /><p className="fine-print">{edit ? 'Products already used in claims retain protected identity fields.' : 'Expiry is calculated by the API from the start date and duration.'}</p></div>
-      <div className="form-actions"><Link className="button secondary" to={edit ? `/${productId}` : '/'}>Cancel</Link><button className="button" disabled={busy}>{busy ? 'Saving...' : edit ? 'Save changes' : 'Register product'}</button></div>
+      <div className="form-actions"><Link className="button secondary" to={edit ? `/${productId}` : '/'}>Cancel</Link><button type="submit" className="button" disabled={busy}>{busy ? 'Saving...' : edit ? 'Save changes' : 'Register product'}</button></div>
     </form></div>;
 }
 
@@ -202,12 +223,33 @@ function TextArea({label, ...props}) {return <label className="wide">{label}<tex
 
 function ProductDetails() {
   const {productId} = useParams();
-  const navigate = useNavigate();
+  const navigate = useNavigate(), location = useLocation(), request = useRef(null);
   const [product, setProduct] = useState(null);
   const [warranty, setWarranty] = useState(undefined);
   const [error, setError] = useState('');
-  const load = () => api.get(`/products/${productId}`).then(({data}) => setProduct(data.product)).catch(requestError => setError(errorMessage(requestError)));
-  useEffect(() => {load();}, [productId]);
+  const [notice, setNotice] = useState(() => location.state?.notice || '');
+  const load = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    try {
+      const {data} = await api.get(`/products/${productId}`, {signal: controller.signal});
+      if (!controller.signal.aborted) {setProduct(data.product);setError('');}
+    } catch (requestError) {
+      if (!canceled(requestError)) setError(errorMessage(requestError));
+    } finally {
+      if (request.current === controller) request.current = null;
+    }
+  }, [productId]);
+  useEffect(() => {
+    load();
+    const interval = setInterval(() => {if (document.visibilityState === 'visible') load();}, 60000);
+    const visible = () => {if (document.visibilityState === 'visible') load();};
+    window.addEventListener('focus', visible);
+    document.addEventListener('visibilitychange', visible);
+    return () => {clearInterval(interval);request.current?.abort();window.removeEventListener('focus', visible);
+      document.removeEventListener('visibilitychange', visible);};
+  }, [load]);
 
   async function removeProduct() {
     if (!window.confirm(`Delete ${product.name} and its warranty records?`)) return;
@@ -215,13 +257,13 @@ function ProductDetails() {
   }
   async function removeWarranty(item) {
     if (!window.confirm('Delete this warranty record?')) return;
-    try {await api.delete(`/warranties/${item.id}`);await load();} catch (requestError) {setError(errorMessage(requestError));}
+    try {const {data} = await api.delete(`/warranties/${item.id}`);setNotice(data.message);await load();} catch (requestError) {setError(errorMessage(requestError));}
   }
 
   if (!product && !error) return <div className="loading">Loading product...</div>;
   if (!product) return <ErrorBox error={error} />;
   const current = product.current_warranty;
-  return <><Link className="back-link" to="/"><ChevronLeft size={15} />All products</Link><ErrorBox error={error} />
+  return <><Link className="back-link" to="/"><ChevronLeft size={15} />All products</Link>{notice && <div className="notice" role="status">{notice}</div>}<ErrorBox error={error} />
     <div className="page-heading detail-page"><div className="detail-heading"><span className="product-icon"><Box size={30} /></span><div><p className="eyebrow">PRODUCT DETAILS</p><h1>{product.name}</h1><p>{product.brand} - {product.model_number} - {product.category}</p></div></div>
       <div className="detail-actions"><Link className="button secondary" to={`/${product.id}/edit`}><Pencil size={16} />Edit product</Link><button className="button" data-action="add-warranty" onClick={() => setWarranty(null)}><Plus size={16} />{product.warranties.length ? 'Extend warranty' : 'Add warranty'}</button></div></div>
     <div className="detail-grid"><div><section className="panel"><div className="panel-heading"><h2>Product information</h2></div><div className="panel-body"><dl className="data-grid">
@@ -231,7 +273,7 @@ function ProductDetails() {
     </section><div className="danger-zone"><span>Products used in claims are retained for your records.</span><button className="text-button danger" onClick={removeProduct}><Trash2 size={15} />Delete product</button></div></div>
       <div><section className="panel"><div className="coverage-hero"><Status>{product.warranty_status}</Status><h2>{product.warranty_remaining}</h2><p>{current ? `Warranty expiry - ${formatDate(current.expiry_date)}` : 'Add a warranty to see your protection.'}</p>{current && <><progress max="100" value={current.progress_percent}>{current.progress_percent}%</progress><div className="progress-caption"><span>{formatDate(current.start_date)}</span><span>{formatDate(current.expiry_date)}</span></div></>}</div><div className="panel-body"><dl className="data-grid"><Detail label="Provider" value={current?.provider} /><Detail label="As of (UTC)" value={formatDate(product.server_date)} /></dl></div></section>
       <section className="panel"><div className="panel-heading"><h2>Your warranty timeline</h2></div><div className="panel-body"><ol className="timeline">{product.timeline.map((event, index) => <li className={event.kind === 'today' ? 'today' : ''} key={`${event.date}-${index}`}><span>{event.label}</span><time dateTime={event.date}>{formatDate(event.date)}</time></li>)}</ol></div></section></div></div>
-    {warranty !== undefined && <WarrantyForm product={product} warranty={warranty} onClose={() => setWarranty(undefined)} onSaved={async () => {setWarranty(undefined);await load();}} />}
+    {warranty !== undefined && <WarrantyForm product={product} warranty={warranty} onClose={() => setWarranty(undefined)} onSaved={async message => {setWarranty(undefined);setNotice(message);await load();}} />}
   </>;
 }
 
@@ -245,19 +287,21 @@ function WarrantyForm({product, warranty, onClose, onSaved}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
-    const timer = setTimeout(() => api.post('/warranties/preview', {start_date: values.start_date, duration: Number(values.duration), duration_unit: values.duration_unit})
-      .then(({data}) => setPreview(formatDate(data.expiry_date))).catch(requestError => setPreview(errorMessage(requestError))), 250);
-    return () => clearTimeout(timer);
+    const controller = new AbortController();
+    const timer = setTimeout(() => api.post('/warranties/preview', {start_date: values.start_date, duration: Number(values.duration), duration_unit: values.duration_unit}, {signal: controller.signal})
+      .then(({data}) => setPreview(formatDate(data.expiry_date)))
+      .catch(requestError => {if (!canceled(requestError)) setPreview(errorMessage(requestError));}), 250);
+    return () => {clearTimeout(timer);controller.abort();};
   }, [values.start_date, values.duration, values.duration_unit]);
   const update = event => setValues(current => ({...current, [event.target.name]: event.target.value}));
   async function submit(event) {
     event.preventDefault();setBusy(true);setError('');
     const payload = {...values, duration: Number(values.duration), exclusions: values.exclusions.split('\n').map(item => item.trim()).filter(Boolean)};
-    try {warranty ? await api.put(`/warranties/${warranty.id}`, payload) : await api.post(`/products/${product.id}/warranties`, payload);await onSaved();}
+    try {const {data} = warranty ? await api.put(`/warranties/${warranty.id}`, payload) : await api.post(`/products/${product.id}/warranties`, payload);await onSaved(data.message);}
     catch (requestError) {setError(errorMessage(requestError));} finally {setBusy(false);}
   }
   return <div className="modal-backdrop" role="presentation"><section className="warranty-modal" role="dialog" aria-modal="true" aria-labelledby="warranty-title"><div className="dialog-heading"><div><p className="eyebrow">{product.name}</p><h2 id="warranty-title">{warranty ? 'Edit warranty' : product.warranties.length ? 'Add an extended warranty' : 'Add original warranty'}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close warranty form">x</button></div>
-    <p className="muted">Each warranty period must follow the original without overlapping another period.</p><form id="warranty-form" onSubmit={submit}><div className="fields"><Field label="Provider" name="provider" value={values.provider} onChange={update} required /><Field label="Start date" name="start_date" type="date" min={product.purchase_date} value={values.start_date} onChange={update} required /><Field label="Duration" name="duration" type="number" min="1" max={values.duration_unit === 'years' ? 100 : 1200} value={values.duration} onChange={update} required /><label>Duration unit<select name="duration_unit" value={values.duration_unit} onChange={update}><option value="months">Months</option><option value="years">Years</option></select></label><TextArea label="Coverage" name="coverage" value={values.coverage} onChange={update} /><TextArea label="Exclusions (one per line)" name="exclusions" value={values.exclusions} onChange={update} /><TextArea label="Service-center conditions" name="service_center_conditions" value={values.service_center_conditions} onChange={update} /></div><div className="calculation"><span>Calculated expiry date</span><strong id="expiry-preview">{preview}</strong></div><ErrorBox error={error} /><div className="form-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button" disabled={busy}>{busy ? 'Saving...' : warranty ? 'Save warranty' : 'Add warranty'}</button></div></form></section></div>;
+    <p className="muted">Each warranty period must follow the original without overlapping another period.</p><form id="warranty-form" onSubmit={submit}><div className="fields"><Field label="Provider" name="provider" value={values.provider} onChange={update} required /><Field label="Start date" name="start_date" type="date" min={product.purchase_date} value={values.start_date} onChange={update} required /><Field label="Duration" name="duration" type="number" min="1" max={values.duration_unit === 'years' ? 100 : 1200} value={values.duration} onChange={update} required /><label>Duration unit<select name="duration_unit" value={values.duration_unit} onChange={update}><option value="months">Months</option><option value="years">Years</option></select></label><TextArea label="Coverage" name="coverage" value={values.coverage} onChange={update} /><TextArea label="Exclusions (one per line)" name="exclusions" value={values.exclusions} onChange={update} /><TextArea label="Service-center conditions" name="service_center_conditions" value={values.service_center_conditions} onChange={update} /></div><div className="calculation"><span>Calculated expiry date</span><strong id="expiry-preview">{preview}</strong></div><ErrorBox error={error} /><div className="form-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button type="submit" className="button" disabled={busy}>{busy ? 'Saving...' : warranty ? 'Save warranty' : 'Add warranty'}</button></div></form></section></div>;
 }
 
 export default function ProductsApp() {

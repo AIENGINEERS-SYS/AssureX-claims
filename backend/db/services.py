@@ -23,7 +23,8 @@ def create_claim(session: Session, *, user_id: int, product_id: int, warranty_id
 def record_prediction(session: Session, *, model_version_id: int, claim_id: int,
                       predicted_class: str, confidence_valid: Decimal,
                       confidence_invalid: Decimal, confidence_manual_review: Decimal,
-                      claim_summary_card_path: str | None = None):
+                      claim_summary_card_path: str | None = None,
+                      inference_duration_ms: int | None = None):
     model = session.get(ModelVersion, model_version_id)
     if model is None or session.get(Claim, claim_id) is None:
         raise ValueError("Claim and model version must exist")
@@ -37,11 +38,14 @@ def record_prediction(session: Session, *, model_version_id: int, claim_id: int,
         raise ValueError("Predicted class must have the top confidence")
     if model.model_type == "gtm" and not claim_summary_card_path:
         raise ValueError("GTM prediction requires a summary card")
+    if inference_duration_ms is not None and inference_duration_ms < 0:
+        raise ValueError("Inference duration cannot be negative")
     cls = PythonPrediction if model.model_type == "python" else GTMPrediction
     kwargs = {"claim_summary_card_path": claim_summary_card_path} if model.model_type == "gtm" else {}
     prediction = cls(claim_id=claim_id, model_version_id=model_version_id, predicted_class=predicted_class,
                      confidence_valid=confidence_valid, confidence_invalid=confidence_invalid,
-                     confidence_manual_review=confidence_manual_review, top_confidence=top, **kwargs)
+                     confidence_manual_review=confidence_manual_review, top_confidence=top,
+                     inference_duration_ms=inference_duration_ms, **kwargs)
     session.add(prediction)
     session.flush()
     return prediction

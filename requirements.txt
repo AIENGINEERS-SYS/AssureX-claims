@@ -17,3 +17,10 @@ Pillow>=11.3,<13
 pypdf>=6.1,<7
 PyMuPDF>=1.26,<2
 pytesseract>=0.3.13,<0.4
+joblib>=1.4,<2
+numpy>=1.26,<2
+pandas>=2.2,<3
+scikit-learn==1.8.0
+xgboost>=3.0,<4
+tensorflow>=2.16,<2.18; python_version < "3.13"
+tensorflowjs==4.22.0; python_version < "3.13"

@@ -1,6 +1,6 @@
 # Phase 23 dashboards
 
-AssureX serves `/dashboard/customer`, `/dashboard/reviewer`, and `/dashboard/admin` through the existing Flask app. The supplied design informs the dark green navigation, lime actions, light cards, and status chips. The HTML shells are public; **all dashboard data APIs require JWT**. Customers see only their own records, reviewers see unassigned or assigned cases, and administrators can inspect a customer view using `user_id`.
+AssureX exposes `/dashboard/customer`, `/dashboard/reviewer`, and `/dashboard/admin` as browser routes. The API service redirects these paths to the standalone React service configured by `FRONTEND_URL`, preserving deep links and query strings. The supplied design informs the dark green navigation, lime actions, light cards, and status chips. The HTML shell is public; **all dashboard data APIs require JWT**. Customers see only their own records, reviewers see unassigned or assigned cases, and administrators can inspect a customer view using `user_id`.
 
 ## Start locally
 
@@ -8,7 +8,7 @@ AssureX serves `/dashboard/customer`, `/dashboard/reviewer`, and `/dashboard/adm
 2. Configure `DATABASE_URL` and random `JWT_SECRET_KEY` using `config/.env.example`. Production requires PostgreSQL.
 3. Run `python -m flask --app backend:create_app db upgrade`.
 4. Run `npm --prefix frontend ci` and `npm --prefix frontend run build`.
-5. Start Flask, open `/dashboard`, and sign in with an existing account.
+5. Start Flask and Vite, open `/dashboard` on either service, and sign in with an existing account. Flask redirects browser routes to `FRONTEND_URL`.
 6. Schedule `python -m flask --app backend:create_app dashboard-reminders` daily. It creates idempotent warranty notices.
 
 Access and refresh tokens stay in browser memory. A reload requires sign-in. React Query caches each role's data for 15 seconds and refetches every 30 seconds and on focus. API responses use `Cache-Control: no-store`. Production needs a shared Redis limiter; large dashboard reads are limited to 60/minute.
@@ -20,7 +20,7 @@ Access and refresh tokens stay in browser memory. A reload requires sign-in. Rea
 | Product coverage | One applicable warranty per product, prioritizing active extensions, using the UTC date and `WARRANTY_NEAR_EXPIRY_DAYS`. |
 | Claim outcomes | Stored claim status. Lifetime includes drafts; customer counts list drafts separately. |
 | Reviewer risk | Highest latest Python/GTM invalid-class confidence; labeled as a proxy, not a calibrated fraud score. Missing predictions yield null. |
-| Model disagreement | Latest Python and GTM classes differ or top confidence differs by `DASHBOARD_DISAGREEMENT_GAP` (default 0.20). Denominator: claims with both outputs. |
+| Model disagreement | Latest Python and GTM classes differ or top confidence differs by `MODEL_ACCEPTABLE_MAX_GAP` (default 0.20). Denominator: claims with both outputs. `DASHBOARD_DISAGREEMENT_GAP` remains a legacy default alias. |
 | Model confidence | Mean top confidence of latest available outputs for non-draft claims. No missing value is treated as zero. |
 | Model performance | Accuracy, precision, recall, and F1 from stored model version metrics, null if absent. |
 | Duplicate warnings | SHA-256 exact file matches across separate non-draft claims; reviewer dispositions are retained separately. |

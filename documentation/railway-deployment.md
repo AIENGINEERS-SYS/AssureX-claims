@@ -18,6 +18,7 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 JWT_SECRET_KEY=<random secret of at least 32 bytes>
 RATELIMIT_STORAGE_URI=${{Redis.REDIS_URL}}
 FRONTEND_ORIGINS=https://${{Frontend.RAILWAY_PUBLIC_DOMAIN}}
+FRONTEND_URL=https://${{Frontend.RAILWAY_PUBLIC_DOMAIN}}
 ```
 
 Add the existing document-storage and OCR variables from `config/.env.example`. Generate a public domain for the API service. The API image installs Tesseract, applies database migrations on startup, and runs Waitress on Railway's `PORT`.
@@ -38,7 +39,7 @@ VITE_API_URL=https://${{API.RAILWAY_PUBLIC_DOMAIN}}/api
 
 Generate a public domain for the frontend service. Railpack builds the Vite application into `dist/` and serves it with Caddy. `Staticfile` enables SPA fallback for `/products`, `/claims`, and `/dashboard`.
 
-When using custom domains, replace both generated-domain references with the final public HTTPS origins. `FRONTEND_ORIGINS` accepts a comma-separated list for production and preview frontends; wildcard origins are rejected.
+When using custom domains, replace the generated-domain references with the final public HTTPS origins. `FRONTEND_URL` is the canonical browser destination. `FRONTEND_ORIGINS` accepts a comma-separated list for production and preview frontends; wildcard origins are rejected.
 
 ## Local development
 

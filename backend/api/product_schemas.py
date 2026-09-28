@@ -75,6 +75,16 @@ class ProductQuery(PaginationSchema):
     sort = fields.String(load_default="newest", validate=validate.OneOf([
         "newest", "oldest", "name", "purchase_date", "expiry_date"]))
 
+    @pre_load
+    def normalize_optional_filters(self, data, **kwargs):
+        if not isinstance(data, dict):
+            raise ValidationError("Expected query parameters.")
+        cleaned = dict(data)
+        for key in ("category", "warranty_status"):
+            if isinstance(cleaned.get(key), str) and not cleaned[key].strip():
+                cleaned.pop(key)
+        return cleaned
+
 
 class WarrantyPreview(StrictSchema):
     start_date = fields.Date(required=True)

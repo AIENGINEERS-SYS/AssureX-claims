@@ -154,6 +154,7 @@ def test_search_filters_sort_pagination_and_status_parity(client,app,headers):
     assert response.status_code == 200,response.json
     assert response.json["items"][0]["name"] == "Alpha phone" and response.json["total"] == 2
     assert response.json["summary"]["by_status"]["Near Expiry"] == 1
+    assert client.get("/api/products?q=&category=&warranty_status=&sort=newest&page=1",headers=headers).status_code == 200
     assert client.get("/api/products?q=phone",headers=headers).json["total"] == 1
     assert client.get("/api/products?q=%25",headers=headers).json["total"] == 0
     assert client.get("/api/products?category=Phones",headers=headers).json["items"][0]["category"] == "Phones"
@@ -260,7 +261,7 @@ def test_preview_and_config_threshold(client,app,headers):
     assert client.get("/api/products?warranty_status=Near%20Expiry",headers=headers).json["total"] == 1
 
 
-def test_api_health_cors_and_no_frontend_routes(client):
+def test_api_health_cors_and_frontend_route_handoff(client):
     health = client.get("/api/health")
     assert health.status_code == 200 and health.json == {"status": "ok"}
 
@@ -279,7 +280,10 @@ def test_api_health_cors_and_no_frontend_routes(client):
     })
     assert denied.status_code == 403
     assert "Access-Control-Allow-Origin" not in denied.headers
-    assert client.get("/products").status_code == 404
+    for path in ("/products", "/claims/draft/42", "/dashboard/admin"):
+        response = client.get(path)
+        assert response.status_code == 307
+        assert response.headers["Location"] == f"http://localhost:5173{path}"
 
 
 def test_legacy_coverage_survives_warranty_edit(client,app,headers):

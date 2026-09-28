@@ -7,7 +7,7 @@ The application now uses two independent services:
 - `frontend/`: a standalone React 19 and Vite single-page application.
 - `backend/`: a Flask JSON API mounted under `/api`.
 
-The browser calls the Flask API through `VITE_API_URL`; Flask does not serve the React application or its assets.
+The browser calls the Flask API through `VITE_API_URL`; Flask does not serve React assets, but known browser routes on the API host redirect to the standalone frontend configured by `FRONTEND_URL`.
 
 ## Feature status
 
@@ -16,20 +16,20 @@ The browser calls the Flask API through `VITE_API_URL`; Flask does not serve the
 | Registration, login, products, and warranties | Implemented |
 | Claim drafts, uploads, OCR review, submission, and tracking | Implemented |
 | Customer, reviewer, and administrator dashboards | Implemented |
-| Exact duplicate-document detection and reviewer decisions | Implemented |
-| Python model prediction generation | Data model and artifacts only; runtime inference is not implemented |
-| Google Teachable Machine prediction generation | Data model and artifacts only; runtime inference is not implemented |
-| Warranty-rule and contradiction generation | Result storage exists; the evaluation engine is not implemented |
-| Claim Summary Card generation | Path storage exists; card generation is not implemented |
+| Document and evidence-based claim duplicate detection | Implemented |
+| Python model prediction generation | Implemented |
+| Google Teachable Machine prediction generation | Implemented |
+| Warranty-rule, contradiction, and decision generation | Implemented |
+| Private Claim Summary Card generation | Implemented |
 | PDF or CSV claim-report export | Not implemented |
 
-The incomplete capabilities are documented below so that stored model or rule data is not mistaken for a working inference pipeline.
+Model operation and deployment details are documented in `documentation/model-evaluation.md`.
 
 ## Install the application
 
 ### Requirements
 
-- Python 3.11+
+- Python 3.11 or 3.12 for the complete Python and GTM inference stack
 - Node.js 20+ and npm
 - Tesseract OCR for image and scanned-PDF extraction
 - SQLite for local development; PostgreSQL is required in production
@@ -103,6 +103,7 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 JWT_SECRET_KEY=<random-secret-at-least-32-bytes>
 RATELIMIT_STORAGE_URI=${{Redis.REDIS_URL}}
 FRONTEND_ORIGINS=https://${{Frontend.RAILWAY_PUBLIC_DOMAIN}}
+FRONTEND_URL=https://${{Frontend.RAILWAY_PUBLIC_DOMAIN}}
 ```
 
 The start script applies migrations and starts Waitress on Railway's assigned `PORT`.
@@ -120,7 +121,7 @@ Set the public API URL at build time:
 VITE_API_URL=https://${{API.RAILWAY_PUBLIC_DOMAIN}}/api
 ```
 
-Generate a public domain for each service. When using custom domains, set `VITE_API_URL` to the final API domain and `FRONTEND_ORIGINS` to the exact frontend HTTPS origin. Wildcard production origins are rejected. See [Railway deployment](documentation/railway-deployment.md) for the complete setup.
+Generate a public domain for each service. When using custom domains, set `VITE_API_URL` to the final API domain and set both `FRONTEND_URL` and `FRONTEND_ORIGINS` to the canonical frontend HTTPS origin. Wildcard production origins are rejected. See [Railway deployment](documentation/railway-deployment.md) for the complete setup.
 
 ## Register or log in
 
@@ -204,9 +205,9 @@ The API rechecks ownership, required fields, document completeness, review state
 
 ## Generate the Python prediction
 
-Python prediction generation is **not currently available through the application**. There is no supported **Generate prediction** control and no `/api/predict/python` route.
-
-The repository contains serialized files under `models/` and database tables for immutable `PythonPrediction` records. Those files are not loaded by the Flask application, and their presence does not mean that a submitted claim has been scored. A runtime feature still needs validated feature preparation, model loading, version registration, an authenticated inference endpoint, persistence, failure handling, and tests before this workflow can be documented as executable.
+An assigned employee, eligible reviewer, or administrator can run the independent Python adapter with
+`POST /api/predict/python` and `{ "claim_id": 123 }`. The adapter prepares the model's declared feature frame,
+normalizes labels and probabilities, registers the artifact version, and appends an immutable prediction row.
 
 ## Interpret Python confidence scores
 
@@ -218,21 +219,23 @@ Stored prediction records use three canonical classes:
 
 The corresponding fields are `confidence_valid`, `confidence_invalid`, and `confidence_manual_review`; each must be between `0` and `1`. `top_confidence` is the largest score and must belong to `predicted_class`.
 
-A confidence value expresses model preference, not a final claim decision and not a calibrated fraud probability. Reviewers must also consider documents, warranty coverage, duplicate warnings, and rule results. Because runtime inference is not implemented, the current UI only displays confidence records that were inserted by trusted fixtures or another internal process.
+A confidence value expresses model preference, not a final claim decision and not a calibrated fraud probability. Reviewers must also consider documents, warranty coverage, duplicate warnings, and rule results.
 
 ## Generate the Claim Summary Card
 
-Claim Summary Card generation is **not currently implemented**. A GTM prediction record has a required `claim_summary_card_path`, but that field only stores a private path supplied by another trusted process. The backend does not create an image or document, expose a card endpoint, or render a card in React.
+The GTM adapter creates a deterministic 224x224 card containing non-PII claim evidence and stores it under
+the private `MODEL_CARD_PATH`. Cards are not exposed as public static assets.
 
 ## Obtain the Google Teachable Machine prediction
 
-Google Teachable Machine inference is **not currently connected to Flask or React**. The `gtm_model/` directory contains exported artifacts, and the database can store immutable `GTMPrediction` rows, but there is no TensorFlow runtime integration and no `/api/predict/gtm` route. A GTM result cannot currently be generated from the application.
+Run the independent GTM adapter with `POST /api/predict/gtm` and `{ "claim_id": 123 }`. TensorFlowJS model
+loading is lazy, and GTM failure does not prevent the Python route or a partial combined evaluation from succeeding.
 
 ## Compare both model results
 
-When both Python and GTM prediction rows already exist, the reviewer and administrator dashboards can display their latest classes and confidence values. The reviewer dashboard identifies a disagreement when the classes differ or when the top-confidence gap reaches `DASHBOARD_DISAGREEMENT_GAP` (default `0.20`).
-
-This is dashboard comparison of stored records, not an evaluation trigger. The application currently has no endpoint that runs both models or creates missing prediction rows.
+`POST /api/claims/<numeric-claim-id>/evaluate` runs both adapters independently, evaluates policy and evidence,
+scores duplicate signals, creates a transparent recommendation, and stores an immutable evaluation snapshot.
+Comparison statuses and their centralized thresholds are documented in `documentation/model-evaluation.md`.
 
 ## Review warranty-rule results
 
@@ -243,17 +246,18 @@ GET /api/review/<numeric-claim-id>/risk
 Authorization: Bearer <access-token>
 ```
 
-No current service evaluates `data/assurex_nigeria_policy_rules_v2.json` and generates these rows. Therefore, an empty result means no rules have been recorded; it must not be interpreted as a passed warranty check.
+`WarrantyPolicyService` validates `data/warranty_policies.json`. `ClaimRuleEngine` records warranty expiry,
+serial verification, contradictions, missing evidence, repair authorization, and excluded-damage results.
+A missing or invalid policy forces manual review rather than being treated as valid coverage.
 
 ## Check contradictions
 
-Automated contradiction detection is **not currently implemented**. OCR preserves original and customer-confirmed values so a future evaluator can compare dates, serial numbers, models, invoices, and product details without overwriting source evidence. There is currently no contradiction endpoint, UI section, or automatic contradiction result generation.
-
-Reviewers can still compare the claim details with each source document manually from the reviewer case dialog.
+Combined evaluation compares registered values with confirmed or extracted document values and repair records.
+Date, serial-number, and product-model contradictions are stored as structured findings and rendered in the reviewer case dialog.
 
 ## Identify duplicate claims
 
-AssureX currently detects exact duplicate documents, not general semantic claim similarity.
+AssureX detects both exact duplicate documents and evidence-based claim similarity.
 
 1. Every accepted document receives a SHA-256 content hash.
 2. Re-uploading the same content to the same claim is rejected, even under a different filename.
@@ -261,7 +265,8 @@ AssureX currently detects exact duplicate documents, not general semantic claim 
 4. A reviewer or administrator opens `/dashboard/reviewer` and checks **Duplicate warning queue**.
 5. Select **Review**, inspect the related claim, and choose **Confirm duplicate** or **Reject warning**.
 
-Customer-facing responses do not disclose another customer's claim details. Similar descriptions or product details without an exact document match are not currently classified as duplicates.
+Combined evaluation narrows candidate claims in SQL, then scores document hashes, serial and invoice numbers,
+claimant, product model, description similarity, and claim dates. Related claim IDs remain reviewer/admin-only.
 
 ## Access the manual-review queue
 
@@ -269,7 +274,8 @@ Customer-facing responses do not disclose another customer's claim details. Simi
 2. Open `/dashboard/reviewer`.
 3. Search the **Manual review queue** and select **Open case**.
 4. Inspect the claim details and attached evidence.
-5. Assign a reviewer, add notes, request another document, approve, or reject as permitted.
+5. Inspect model comparison, policies, rules, contradictions, duplicate signals, and prior actions.
+6. Assign a reviewer, add notes, request evidence, approve, reject, or explicitly override with a reason.
 
 The queue contains claims whose status is `manual_review` and whose `manual_review_required` flag is true. Administrators can see all eligible cases; reviewers see unassigned cases and cases assigned to them.
 

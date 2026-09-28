@@ -1,0 +1,35 @@
+{
+  "version": "2026.09",
+  "policies": [
+    {
+      "code": "electronics",
+      "categories": ["electronics", "laptop", "computer", "camera", "television"],
+      "warranty_months": 24,
+      "required_documents": ["receipt", "serial_number_image", "product_image", "damage_evidence"],
+      "optional_documents": ["warranty_card", "diagnostic_report", "repair_report"],
+      "exclusions": ["water damage", "intentional damage", "misuse", "physical impact", "wrong voltage"],
+      "authorized_repair_required": true,
+      "unauthorized_repair_invalidates": true
+    },
+    {
+      "code": "appliances",
+      "categories": ["appliance", "appliances", "home appliance", "refrigerator", "washing machine"],
+      "warranty_months": 24,
+      "required_documents": ["receipt", "product_image", "damage_evidence"],
+      "optional_documents": ["warranty_card", "serial_number_image", "repair_report"],
+      "exclusions": ["misuse", "physical impact", "wrong voltage", "commercial use"],
+      "authorized_repair_required": true,
+      "unauthorized_repair_invalidates": true
+    },
+    {
+      "code": "mobile_devices",
+      "categories": ["mobile", "mobile device", "mobile devices", "phone", "smartphone", "tablet"],
+      "warranty_months": 12,
+      "required_documents": ["receipt", "serial_number_image", "product_image", "damage_evidence"],
+      "optional_documents": ["warranty_card", "diagnostic_report", "repair_report"],
+      "exclusions": ["water damage", "liquid damage", "broken screen", "intentional damage", "misuse", "physical impact"],
+      "authorized_repair_required": true,
+      "unauthorized_repair_invalidates": true
+    }
+  ]
+}

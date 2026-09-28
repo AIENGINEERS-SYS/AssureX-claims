@@ -42,9 +42,11 @@ def settings():
     default_origins = "http://localhost:5173,http://127.0.0.1:5173" if environment == "development" else ""
     frontend_origins = tuple(origin.strip().rstrip("/") for origin in
         os.getenv("FRONTEND_ORIGINS", default_origins).split(",") if origin.strip())
+    frontend_url = os.getenv("FRONTEND_URL", frontend_origins[0] if frontend_origins else "").strip().rstrip("/")
     return {
         "ASSUREX_ENV": environment,
         "FRONTEND_ORIGINS": frontend_origins,
+        "FRONTEND_URL": frontend_url,
         "SQLALCHEMY_DATABASE_URI": url.render_as_string(hide_password=False),
         "SQLALCHEMY_TRACK_MODIFICATIONS": False,
         "SQLALCHEMY_ENGINE_OPTIONS": {"pool_pre_ping": True},
@@ -61,6 +63,19 @@ def settings():
         "BCRYPT_LOG_ROUNDS": 12,
         "WARRANTY_NEAR_EXPIRY_DAYS": _integer("WARRANTY_NEAR_EXPIRY_DAYS", 30),
         "DASHBOARD_DISAGREEMENT_GAP": _decimal("DASHBOARD_DISAGREEMENT_GAP", 0.20),
+        "MODEL_STRONG_CONFIDENCE": _decimal("MODEL_STRONG_CONFIDENCE", 0.80),
+        "MODEL_ACCEPTABLE_CONFIDENCE": _decimal("MODEL_ACCEPTABLE_CONFIDENCE", 0.65),
+        "MODEL_MINIMUM_CONFIDENCE": _decimal("MODEL_MINIMUM_CONFIDENCE", 0.45),
+        "MODEL_STRONG_MAX_GAP": _decimal("MODEL_STRONG_MAX_GAP", 0.10),
+        "MODEL_ACCEPTABLE_MAX_GAP": _decimal("MODEL_ACCEPTABLE_MAX_GAP",
+                                               os.getenv("DASHBOARD_DISAGREEMENT_GAP", "0.20")),
+        "DUPLICATE_HIGH_THRESHOLD": _decimal("DUPLICATE_HIGH_THRESHOLD", 0.70),
+        "DUPLICATE_MEDIUM_THRESHOLD": _decimal("DUPLICATE_MEDIUM_THRESHOLD", 0.40),
+        "DUPLICATE_DESCRIPTION_THRESHOLD": _decimal("DUPLICATE_DESCRIPTION_THRESHOLD", 0.82),
+        "PYTHON_MODEL_PATH": os.getenv("PYTHON_MODEL_PATH", str(ROOT / "models" / "assurex_xgboost_final.joblib")),
+        "GTM_MODEL_PATH": os.getenv("GTM_MODEL_PATH", str(ROOT / "gtm_model" / "model.json")),
+        "WARRANTY_POLICY_PATH": os.getenv("WARRANTY_POLICY_PATH", str(ROOT / "data" / "warranty_policies.json")),
+        "MODEL_CARD_PATH": os.getenv("MODEL_CARD_PATH", str(ROOT / "instance" / "model_cards")),
         # Multipart framing receives one bounded document per request.
         "MAX_CONTENT_LENGTH": (document_size * 1024 * 1024) + (1024 * 1024),
         "MAX_DOCUMENT_SIZE_MB": document_size,
@@ -108,6 +123,20 @@ def validate_config(app):
         raise RuntimeError("WARRANTY_NEAR_EXPIRY_DAYS must be between 0 and 365")
     if not 0 <= app.config["DASHBOARD_DISAGREEMENT_GAP"] <= 1:
         raise RuntimeError("DASHBOARD_DISAGREEMENT_GAP must be between 0 and 1")
+    probability_settings = (
+        "MODEL_STRONG_CONFIDENCE", "MODEL_ACCEPTABLE_CONFIDENCE", "MODEL_MINIMUM_CONFIDENCE",
+        "MODEL_STRONG_MAX_GAP", "MODEL_ACCEPTABLE_MAX_GAP", "DUPLICATE_HIGH_THRESHOLD",
+        "DUPLICATE_MEDIUM_THRESHOLD", "DUPLICATE_DESCRIPTION_THRESHOLD",
+    )
+    if any(not 0 <= app.config[name] <= 1 for name in probability_settings):
+        raise RuntimeError("Model and duplicate thresholds must be between 0 and 1")
+    if not (app.config["MODEL_MINIMUM_CONFIDENCE"] <= app.config["MODEL_ACCEPTABLE_CONFIDENCE"] <=
+            app.config["MODEL_STRONG_CONFIDENCE"]):
+        raise RuntimeError("Model confidence thresholds must be ordered minimum <= acceptable <= strong")
+    if app.config["MODEL_STRONG_MAX_GAP"] > app.config["MODEL_ACCEPTABLE_MAX_GAP"]:
+        raise RuntimeError("MODEL_STRONG_MAX_GAP cannot exceed MODEL_ACCEPTABLE_MAX_GAP")
+    if app.config["DUPLICATE_MEDIUM_THRESHOLD"] > app.config["DUPLICATE_HIGH_THRESHOLD"]:
+        raise RuntimeError("Duplicate thresholds must be ordered medium <= high")
     secret = app.config.get("JWT_SECRET_KEY")
     if not isinstance(secret, str) or len(secret.encode()) < 32 or secret.startswith("replace-"):
         raise RuntimeError("Set JWT_SECRET_KEY to a randomly generated secret of at least 32 bytes")
@@ -121,3 +150,6 @@ def validate_config(app):
         origins = app.config["FRONTEND_ORIGINS"]
         if not origins or "*" in origins or any(not origin.startswith("https://") for origin in origins):
             raise RuntimeError("Production FRONTEND_ORIGINS must contain explicit HTTPS origins")
+        frontend_url = app.config["FRONTEND_URL"]
+        if not frontend_url.startswith("https://") or frontend_url not in origins:
+            raise RuntimeError("Production FRONTEND_URL must be an allowed HTTPS frontend origin")

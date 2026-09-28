@@ -5,6 +5,7 @@
     "watchPatterns": [
       "backend/**",
       "models/**",
+      "gtm_model/**",
       "data/**",
       "requirements.txt",
       "railpack.json",

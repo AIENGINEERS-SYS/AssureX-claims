@@ -1,6 +1,6 @@
 # Phase 4: Products and warranties
 
-Customers can now register a product and its original warranty in one transaction, browse/search/filter their products, edit details, and add or manage warranty periods. Open `/products` in the Flask application. Administrators can manage all products; employees and reviewers cannot use the product-management APIs. Existing claim access remains unchanged.
+Customers can register a product and its original warranty in one transaction, browse/search/filter their products, edit details, and add or manage warranty periods. Open `/products` in the React application; the API host redirects that browser route to `FRONTEND_URL`. Administrators can manage all products; employees and reviewers cannot use the product-management APIs. Existing claim access remains unchanged.
 
 ## Run the feature
 
@@ -16,7 +16,7 @@ npm run dev
 
 Sign in with an existing customer/admin account, or choose **Create an account** in the sign-in dialog. The frontend uses the existing authentication endpoints. JWTs remain in page memory, refresh is serialized, and no tokens are written to browser storage. Reloading the page requires signing in again. Normal navigation stays within the application; expired-session reauthentication preserves unsaved forms. Logout revokes the session through the API.
 
-The product interface is part of the standalone React/Vite application. It calls the Flask API through `VITE_API_URL`; Flask does not render pages or serve frontend assets. React escapes untrusted values, forms retain values after validation/network failures, and the responsive list includes loading, empty, error and retry states.
+The product interface is part of the standalone React/Vite application. It calls the Flask API through `VITE_API_URL`; Flask redirects known browser routes but does not render pages or serve frontend assets. React escapes untrusted values, forms retain values after validation/network failures, and the responsive list includes loading, empty, error and retry states.
 
 ## Files and architecture
 

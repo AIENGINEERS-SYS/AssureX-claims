@@ -129,7 +129,7 @@ def predictions():
 
 def disagreement_condition(py, gtm):
     return or_(py.c.predicted_class != gtm.c.predicted_class,
-        func.abs(py.c.top_confidence - gtm.c.top_confidence) >= current_app.config["DASHBOARD_DISAGREEMENT_GAP"])
+        func.abs(py.c.top_confidence - gtm.c.top_confidence) >= current_app.config["MODEL_ACCEPTABLE_MAX_GAP"])
 
 
 def review_scope(user_id, admin=False, claim=Claim):
@@ -206,12 +206,12 @@ def reviewer_dashboard(user_id, admin=False, page=1, per_page=10, search=""):
         (gtm.c.confidence_invalid.is_(None), py.c.confidence_invalid),
         (py.c.confidence_invalid >= gtm.c.confidence_invalid, py.c.confidence_invalid),
         else_=gtm.c.confidence_invalid)
-    bucket = case((risk.is_(None), "Unscored"), (risk < .40, "0–39"),
-        (risk < .75, "40–74"), else_="75–100")
+    bucket = case((risk.is_(None), "Unscored"), (risk < .40, "0-39"),
+        (risk < .75, "40-74"), else_="75-100")
     counts = dict(db.session.execute(select(bucket, func.count()).select_from(Claim).
         outerjoin(py, py.c.claim_id == Claim.id).outerjoin(gtm, gtm.c.claim_id == Claim.id).
         where(scope).group_by(bucket)).all())
-    risk_counts = {key: counts.get(key, 0) for key in ("0–39", "40–74", "75–100", "Unscored")}
+    risk_counts = {key: counts.get(key, 0) for key in ("0-39", "40-74", "75-100", "Unscored")}
     requests = select(Claim.id, Claim.claim_id, Claim.updated_at).where(
         Claim.status == "additional_information_required")
     if not admin:
@@ -339,9 +339,9 @@ def admin_dashboard():
             ("submitted", "under_evaluation", "additional_information_required"))}
     observations = union_all(select(py.c.claim_id, py.c.top_confidence),
         select(gtm.c.claim_id, gtm.c.top_confidence)).subquery()
-    cbucket = case((observations.c.top_confidence < .25, "0–24%"),
-        (observations.c.top_confidence < .50, "25–49%"),
-        (observations.c.top_confidence < .75, "50–74%"), else_="75–100%")
+    cbucket = case((observations.c.top_confidence < .25, "0-24%"),
+        (observations.c.top_confidence < .50, "25-49%"),
+        (observations.c.top_confidence < .75, "50-74%"), else_="75-100%")
     confidence_distribution = dict(db.session.execute(select(cbucket, func.count()).join(
         Claim, Claim.id == observations.c.claim_id).where(Claim.status != "draft").group_by(cbucket)).all())
     return {"as_of": stamp(now), "claims": {"lifetime": counts["total"],
@@ -368,7 +368,7 @@ def admin_dashboard():
         "warranties": warranty, "reviewer_workload": workload(), "models": model_history()["items"],
         "charts": {"outcomes": outcomes, "warranties": warranty,
             "confidence_distribution": {key: confidence_distribution.get(key, 0) for key in
-                ("0–24%", "25–49%", "50–74%", "75–100%")},
+                ("0-24%", "25-49%", "50-74%", "75-100%")},
             "volume": trends("30d")["series"]}}
 
 

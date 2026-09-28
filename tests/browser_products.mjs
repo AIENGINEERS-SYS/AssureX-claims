@@ -97,11 +97,13 @@ try {
     await wait(has("#expiry-preview","2027"));
     await click('#product-form button[type="submit"]');
     await wait(has("h1","Living room television"));
+    assert.ok(await evaluate(has('[role="status"]',"Product registered and warranty calculated.")));
     await click('[data-action="add-warranty"]');
     assert.equal(await evaluate('document.querySelector("#warranty-form [name=start_date]").value'),"2027-01-02");
     await fill('#warranty-form [name="provider"]',"Extended Care");
     await click('#warranty-form button[type="submit"]');
     await wait("document.querySelectorAll('.warranty-card').length === 2");
+    assert.ok(await evaluate(has('[role="status"]',"Extended warranty added.")));
     assert.equal(await evaluate('document.querySelector(".warranty-card:last-child").textContent.includes(\'{"description"\')'),false,"Empty coverage must not render internal JSON");
     assert.ok(await evaluate(has(".coverage-hero .status","Active")));
     await click('.detail-actions a[href$="/edit"]');
