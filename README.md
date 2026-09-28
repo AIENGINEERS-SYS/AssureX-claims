@@ -348,6 +348,9 @@ Set `ASSUREX_BROWSER_PATH` when Chrome or Edge is not installed in a location de
 - [Database design](documentation/database.md)
 - [Railway deployment](documentation/railway-deployment.md)
 
+## Blog Post
+https://medium.com/@xavenordu/building-assurex-claim-engine-an-ai-assisted-warranty-claim-management-system-656fce987a0e
+
 ## Security notes
 
 Never commit `.env`, production secrets, uploaded documents, tokens, or database credentials. Production requires HTTPS, PostgreSQL, a shared Redis rate-limit store, an explicit HTTPS `FRONTEND_ORIGINS` list, and private document storage. Keep `JWT_SECRET_KEY` unique per environment and at least 32 bytes long.
