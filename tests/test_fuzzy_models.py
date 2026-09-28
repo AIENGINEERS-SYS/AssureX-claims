@@ -548,8 +548,11 @@ def test_gtm_renders_every_documented_card_variant_deterministically(app, claims
     assert first != other
 
 
-def test_gtm_returns_service_unavailable_when_the_runtime_is_missing(client, app, claims):
+def test_gtm_returns_service_unavailable_when_the_runtime_is_missing(client, app, claims, monkeypatch):
     app.config.pop("GTM_PREDICTOR", None)
+    def missing_runtime(*args, **kwargs):
+        raise PredictionError("GTM runtime or model could not be loaded.")
+    monkeypatch.setattr("backend.services.predictions._load_gtm", missing_runtime)
     response = client.post("/api/predict/gtm", headers=auth(client, "employee"),
                            json={"claim_id": claims["customer"]["claim"]})
     assert response.status_code == 503
@@ -689,13 +692,9 @@ def test_evaluation_records_a_policy_configuration_problem(app, client, claims, 
     assert body["evaluation"]["recommendation"] == "manual_review_required"
 
 
-def test_unconfigured_category_breaks_python_feature_derivation(app, client, claims):
-    """Pins current behaviour.
-
-    policy_for_claim falls back to a synthetic policy with no required_documents, and
-    python_features divides by len(required_documents), so real Python inference raises
-    and the evaluation is recorded as failed rather than partial.
-    """
+def test_unconfigured_category_keeps_python_feature_derivation_safe(app, client, claims):
+    """An unknown policy category must degrade to review, not crash feature derivation."""
+    app.config["GTM_PREDICTOR"] = lambda path: [0.8, 0.1, 0.1]
     with app.app_context():
         db.session.get(Claim, claims["customer"]["claim"]).product.category = "Solar Inverter"
         db.session.commit()
@@ -703,10 +702,11 @@ def test_unconfigured_category_breaks_python_feature_derivation(app, client, cla
                            headers=auth(client, "reviewer"))
     assert response.status_code == 201, response.json
     body = response.json["evaluation"]
-    assert body["status"] == "failed"
-    assert body["python_prediction"] is None
-    assert {"python", "gtm"} <= set(body["model_errors"])
-    assert body["model_errors"]["python"] == "Python inference failed."
+    assert body["status"] == "partial"
+    assert body["python_prediction"] is not None
+    assert body["gtm_prediction"] is not None
+    assert "python" not in body["model_errors"]
+    assert "gtm" not in body["model_errors"]
     assert "Solar Inverter" in body["model_errors"]["policy"]
 
 

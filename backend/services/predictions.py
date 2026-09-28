@@ -130,7 +130,13 @@ def python_features(claim, policy, columns):
         "return_window_days": 0, "reporting_delay_days": (claim_date - fault).days if claim_date and fault else np.nan,
         "policy_reporting_deadline_days": 30, "requested_remedy": "Repair or replacement",
         "claim_amount_ngn": float(claim.product.purchase_price),
-        "document_completeness_score": len(docs & set(policy.required_documents)) / len(policy.required_documents),
+        # An unconfigured fallback policy intentionally has no required-document
+        # list. Treat completeness as unknown/conservative rather than dividing
+        # by zero and turning a recoverable policy warning into inference failure.
+        "document_completeness_score": (
+            len(docs & set(policy.required_documents)) / len(policy.required_documents)
+            if policy.required_documents else 0.0
+        ),
         "claim_channel": "Online support form", "manufacture_to_purchase_days": np.nan,
         "purchase_to_fault_days": (fault - purchase).days if fault else np.nan,
         "fault_to_claim_days": (claim_date - fault).days if claim_date and fault else np.nan,
