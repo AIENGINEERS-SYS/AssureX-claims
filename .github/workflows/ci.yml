@@ -20,6 +20,7 @@ jobs:
       RATELIMIT_STORAGE_URI: memory://
       FRONTEND_ORIGINS: http://localhost:5173
       FRONTEND_URL: http://localhost:5173
+      PYTHONPATH: .:tests
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
