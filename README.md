@@ -2,13 +2,6 @@
 
 AssureX is a warranty and insurance claims application. Customers can register products and warranties, create claims, upload evidence, review OCR results, submit claims, and track their status. Reviewers and administrators get separate dashboards for claim handling, duplicate-document review, workload, and operational reporting.
 
-The application now uses two independent services:
-
-- `frontend/`: a standalone React 19 and Vite single-page application.
-- `backend/`: a Flask JSON API mounted under `/api`.
-
-The browser calls the Flask API through `VITE_API_URL`; Flask does not serve React assets, but known browser routes on the API host redirect to the standalone frontend configured by `FRONTEND_URL`.
-
 ## Feature status
 
 | Capability | Status |
