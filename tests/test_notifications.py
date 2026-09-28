@@ -287,6 +287,31 @@ def test_rejection_notification_exposes_only_explicit_customer_reason(client, ap
     assert "INTERNAL" not in message
 
 
+def test_repeated_valid_review_cycles_emit_new_events(app, accounts, claims):
+    with app.app_context():
+        claim = db.session.get(Claim, claims["customer"]["claim"])
+        claim.claim_id = "CLM-2026-000011"
+        claim.assigned_reviewer_id = accounts["reviewer"]
+        service = NotificationService()
+
+        service.send_information_requested(claim, ["receipt"])
+        service.send_information_requested(claim, ["receipt"])
+        service.send_review_notification(claim)
+        service.send_review_notification(claim)
+        db.session.commit()
+
+        customer_rows = db.session.scalars(select(Notification).where(
+            Notification.user_id == accounts["customer"]
+        ).order_by(Notification.id)).all()
+        reviewer_rows = db.session.scalars(select(Notification).where(
+            Notification.user_id == accounts["reviewer"]
+        ).order_by(Notification.id)).all()
+
+        assert [row.notification_type for row in customer_rows].count("INFO_REQUESTED") == 2
+        assert [row.notification_type for row in customer_rows].count("CLAIM_IN_REVIEW") == 2
+        assert [row.notification_type for row in reviewer_rows].count("CLAIM_IN_REVIEW") == 2
+
+
 def test_admin_notification_analytics(client, app, accounts):
     with app.app_context():
         service = NotificationService()

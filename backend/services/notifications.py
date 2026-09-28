@@ -261,7 +261,10 @@ class NotificationService:
         title = "Information request reminder" if reminder else "Additional information requested"
         requester = requester.strip() or "A reviewer"
         message = f"{requester} has requested additional information for Claim {claim.claim_id}.{suffix}"
-        dedupe = None if reminder else f"notification:{claim.user_id}:claim:{claim.id}:info:{'|'.join(requested) or 'general'}"
+        # Each accepted request-information transition is a real event. Route
+        # state guards already reject duplicate submissions while a claim is
+        # waiting for information, so a permanent claim-level dedupe key would
+        # incorrectly suppress a later legitimate request for the same evidence.
         return self.create_notification(
             user_id=claim.user_id,
             notification_type=NotificationType.INFO_REQUESTED,
@@ -271,7 +274,6 @@ class NotificationService:
             reference_type="claim",
             reference_id=claim.claim_id,
             claim_id=claim.id,
-            dedupe_key=dedupe,
         )
 
     def send_review_notification(
@@ -292,7 +294,6 @@ class NotificationService:
                 reference_type="claim",
                 reference_id=claim.claim_id,
                 claim_id=claim.id,
-                dedupe_key=f"notification:{claim.user_id}:claim:{claim.id}:manual-review",
             )
             if item:
                 created.append(item)
@@ -314,7 +315,6 @@ class NotificationService:
                     reference_type="claim",
                     reference_id=claim.claim_id,
                     claim_id=claim.id,
-                    dedupe_key=f"notification:{reviewer.id}:claim:{claim.id}:review-assignment",
                 )
                 if item:
                     created.append(item)
