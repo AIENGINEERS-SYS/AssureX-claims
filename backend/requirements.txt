@@ -24,3 +24,4 @@ xgboost>=3.0,<4
 # GTM inference is loaded lazily so non-inference workers still start cleanly.
 tensorflow>=2.16,<2.18; python_version < "3.13"
 tensorflowjs==4.22.0; python_version < "3.13"
+gunicorn>=23.0.0
