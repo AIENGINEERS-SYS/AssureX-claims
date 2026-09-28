@@ -237,6 +237,36 @@ def test_reviewer_request_and_decision_generate_notifications(client, app, accou
     assert client.get("/api/notifications?type=CLAIM_APPROVED", headers=customer).json["total"] == 1
 
 
+
+def test_rejection_notification_exposes_only_explicit_customer_reason(client, app, accounts, claims):
+    claim_id = claims["customer"]["claim"]
+    with app.app_context():
+        claim = db.session.get(Claim, claim_id)
+        claim.claim_id = "CLM-2026-000010"
+        claim.status = "manual_review"
+        claim.manual_review_required = True
+        claim.final_decision = None
+        db.session.commit()
+
+    reviewer = auth(client, "reviewer")
+    response = client.post(
+        f"/api/review/{claim_id}/reject",
+        headers=reviewer,
+        json={
+            "notes": "INTERNAL: reviewer-only evidence and operational commentary.",
+            "rejection_reason": "The submitted damage is excluded by the warranty terms.",
+        },
+    )
+    assert response.status_code == 200, response.json
+
+    customer = auth(client)
+    notices = client.get("/api/notifications?type=CLAIM_REJECTED", headers=customer)
+    assert notices.status_code == 200 and notices.json["total"] == 1
+    message = notices.json["items"][0]["message"]
+    assert "excluded by the warranty terms" in message
+    assert "INTERNAL" not in message
+
+
 def test_admin_notification_analytics(client, app, accounts):
     with app.app_context():
         service = NotificationService()

@@ -193,7 +193,7 @@ function Reviewer({role}) {
 }
 
 function ReviewModal({item, role, onClose}) {
-  const client = useQueryClient(), [notes, setNotes] = useState(''), [overrideReason, setOverrideReason] = useState(''), [kind, setKind] = useState('receipt'), [error, setError] = useState(''), [reviewerId, setReviewerId] = useState('');
+  const client = useQueryClient(), [notes, setNotes] = useState(''), [rejectionReason, setRejectionReason] = useState(''), [overrideReason, setOverrideReason] = useState(''), [kind, setKind] = useState('receipt'), [error, setError] = useState(''), [reviewerId, setReviewerId] = useState('');
   const detail = query('review-detail', `/dashboard/reviewer/claims/${item.id}`);
   const mutation = useMutation({mutationFn: ({path, body, method = 'post'}) => api[method](path, body),
     onSuccess: (_, variables) => {client.invalidateQueries({queryKey: ['reviewer']});client.invalidateQueries({queryKey: ['admin']});client.invalidateQueries({queryKey: ['review-detail']});if (variables.close !== false) onClose();},
@@ -216,17 +216,18 @@ function ReviewModal({item, role, onClose}) {
       <div className="mini-list">{data.claim.documents.length ? data.claim.documents.map(doc =>
         <span key={doc.id}><button className="text-button" onClick={async () => {try {const response = await api.get(`/documents/${doc.id}/content`, {responseType: 'blob'});
           const url = URL.createObjectURL(response.data);window.open(url, '_blank', 'noopener,noreferrer');setTimeout(() => URL.revokeObjectURL(url), 60000);} catch (err) {setError(errorMessage(err));}}}>Open {label(doc.type)}</button> | OCR {label(doc.ocr_status)} | {label(doc.review_status)}</span>) : <span>No documents attached.</span>}</div>
-      <label htmlFor="review-notes">Decision notes</label><textarea id="review-notes" value={notes} maxLength={10000} onChange={e => setNotes(e.target.value)} placeholder="Record the evidence behind your decision"/>
+      <label htmlFor="review-notes">Decision notes</label><textarea id="review-notes" value={notes} maxLength={10000} onChange={e => setNotes(e.target.value)} placeholder="Internal review notes and decision evidence"/>
+      <label htmlFor="rejection-reason">Customer-visible rejection reason (optional)</label><textarea id="rejection-reason" value={rejectionReason} maxLength={2000} onChange={e => setRejectionReason(e.target.value)} placeholder="Shown to the customer only if the claim is rejected"/>
       {role === 'admin' && <><label htmlFor="reviewer-id">Assign active reviewer ID</label><input id="reviewer-id" type="number" min="1" value={reviewerId} onChange={e => setReviewerId(e.target.value)}/></>}
       {data.claim.status === 'additional_information_required' ? <div className="modal-actions"><button disabled={mutation.isPending} onClick={() => perform(`/dashboard/reviewer/claims/${item.id}/remind`, {})}>Send reminder</button>
         <button className="lime-button" disabled={mutation.isPending} onClick={() => perform(`/dashboard/reviewer/claims/${item.id}/resume`, {})}>Resume review</button></div> : <>
         <div className="modal-actions"><button disabled={mutation.isPending || (role === 'admin' && !reviewerId)} onClick={() => perform(`/dashboard/reviewer/claims/${item.id}/assignment`, role === 'admin' ? {reviewer_id: Number(reviewerId)} : {}, 'patch')}>Assign reviewer</button>
         <button className="lime-button" disabled={mutation.isPending || !notes.trim()} onClick={() => perform(`/review/${item.id}/approve`, {notes})}>Approve</button>
-        <button disabled={mutation.isPending || !notes.trim()} onClick={() => perform(`/review/${item.id}/reject`, {notes})}>Reject</button>
+        <button disabled={mutation.isPending || !notes.trim()} onClick={() => perform(`/review/${item.id}/reject`, {notes, rejection_reason: rejectionReason})}>Reject</button>
         <button disabled={mutation.isPending || !notes.trim()} onClick={() => perform(`/review/${item.id}/notes`, {notes})}>Add notes</button></div>
         {data.evaluation && <><label htmlFor="override-reason">Override reason</label><textarea id="override-reason" value={overrideReason} maxLength={10000} onChange={e => setOverrideReason(e.target.value)} placeholder="Explain why the evidence supports a different decision"/>
           <div className="modal-actions"><button disabled={mutation.isPending || !notes.trim() || overrideReason.trim().length < 3} onClick={() => perform(`/review/${item.id}/override`, {decision: 'approve', notes, override_reason: overrideReason})}>Override and approve</button>
-            <button disabled={mutation.isPending || !notes.trim() || overrideReason.trim().length < 3} onClick={() => perform(`/review/${item.id}/override`, {decision: 'reject', notes, override_reason: overrideReason})}>Override and reject</button></div></>}
+            <button disabled={mutation.isPending || !notes.trim() || overrideReason.trim().length < 3} onClick={() => perform(`/review/${item.id}/override`, {decision: 'reject', notes, override_reason: overrideReason, rejection_reason: rejectionReason})}>Override and reject</button></div></>}
         <label htmlFor="request-type">Request document</label><select id="request-type" value={kind} onChange={e => setKind(e.target.value)}>
           {['receipt','warranty_card','serial_number_image','diagnostic_report','product_image','damage_evidence','invoice','repair_report'].map(t => <option value={t} key={t}>{label(t)}</option>)}</select>
         <button onClick={() => perform(`/dashboard/reviewer/claims/${item.id}/request-documents`, {document_types: [kind]})}>Request and notify customer</button></>}

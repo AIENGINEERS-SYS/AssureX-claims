@@ -14,6 +14,8 @@ Phase 24 adds an authenticated, role-aware in-app notification platform for Assu
 | CLAIM_APPROVED | HIGH | Customer | Reviewer approves claim |
 | CLAIM_REJECTED | HIGH | Customer | Reviewer rejects claim |
 
+For reviewer rejection endpoints, `notes` remains internal review evidence. An optional `rejection_reason` field (maximum 2,000 characters) is the only reviewer-supplied reason included in the customer notification.
+
 Priorities are LOW, MEDIUM, HIGH, and CRITICAL.
 
 ## Persistence

@@ -79,6 +79,9 @@ class AssignmentSchema(StrictSchema):
 
 class ReviewSchema(StrictSchema):
     notes = fields.String(required=True, validate=[validate.Length(min=1, max=10000), nonblank])
+    # Customer-visible only when a reviewer rejects a claim. Keep this separate
+    # from internal reviewer notes so operational commentary is never leaked.
+    rejection_reason = fields.String(load_default=None, allow_none=True, validate=validate.Length(max=2000))
 
 
 class ClaimIdSchema(StrictSchema):

@@ -63,7 +63,7 @@ def record(claim_id, decision, data=None, *, explicit_override=False):
     if decision == "approve":
         NotificationService().send_claim_approved(claim)
     elif decision == "reject":
-        NotificationService().send_claim_rejected(claim, data.get("notes"))
+        NotificationService().send_claim_rejected(claim, data.get("rejection_reason"))
     audit("review.override" if explicit_override else "review." + decision, claim,
           old={"automated_recommendation": previous},
           new={"status": claim.status, "human_decision": human_decision,
