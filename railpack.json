@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "provider": "python",
+  "packages": {
+    "python": "3.11",
+    "node": "20"
+  },
+  "steps": {
+    "install": {
+      "commands": [
+        "...",
+        {
+          "cmd": "npm --prefix frontend ci",
+          "customName": "Install frontend dependencies"
+        }
+      ]
+    },
+    "build": {
+      "inputs": [
+        {
+          "step": "install"
+        }
+      ],
+      "commands": [
+        {
+          "cmd": "npm --prefix frontend run build",
+          "customName": "Build frontend assets"
+        }
+      ]
+    }
+  },
+  "deploy": {
+    "inputs": [
+      "...",
+      {
+        "step": "build",
+        "include": [
+          "frontend/static/claims",
+          "frontend/static/dashboard"
+        ]
+      }
+    ],
+    "aptPackages": [
+      "tesseract-ocr"
+    ],
+    "variables": {
+      "ASSUREX_ENV": "production",
+      "FLASK_APP": "backend:create_app",
+      "PYTHONUNBUFFERED": "1"
+    },
+    "startCommand": "sh scripts/railpack-start.sh"
+  }
+}

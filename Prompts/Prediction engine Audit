@@ -1,0 +1,2039 @@
+You are a senior AI engineer, machine learning engineer, application security engineer, backend architect, database engineer, full-stack engineer, QA engineer, and production systems auditor.
+
+You are working on the existing AssureX Claims Management System repository after the implementation of Phases 14–21.
+
+Your task is NOT to add another parallel implementation.
+
+Your task is to:
+
+1. inspect the actual implementation,
+2. verify that Phases 14–21 are truly integrated,
+3. identify bugs, architectural defects, security vulnerabilities, data leakage, model leakage, information leakage, privacy issues, incorrect business logic, race conditions, inconsistent state, and incomplete integrations,
+4. fix the problems directly,
+5. run appropriate tests,
+6. trace complete workflows end to end,
+7. leave the repository in a production-ready state.
+
+Do not merely produce recommendations.
+
+When you find a defect that can safely be fixed, fix it.
+
+Do not assume that something works because:
+
+* a route exists,
+* a service exists,
+* tests pass,
+* the frontend renders,
+* the code compiles,
+* or a previous implementation report says it works.
+
+Verify actual behavior.
+
+⸻
+
+PRIMARY OBJECTIVE
+
+Audit and harden the implementation covering:
+
+* Phase 14: Prediction APIs
+* Phase 15: Model Comparison Engine
+* Phase 16: Warranty Rule Engine
+* Phase 17: Rule Checks
+* Phase 18: Duplicate Detection
+* Phase 19: Final Decision Engine
+* Phase 20: Decision Explanations
+* Phase 21: Manual Review System
+
+Audit both:
+
+functional correctness
+
+and
+
+security/privacy correctness
+
+with special emphasis on preventing any form of leakage.
+
+⸻
+
+STEP 1 — INSPECT THE REPOSITORY FIRST
+
+Before changing anything, inspect:
+
+* backend structure
+* frontend structure
+* database models
+* database migrations
+* API routes
+* API schemas
+* JWT authentication
+* RBAC
+* claim workflow
+* prediction services
+* Python ML model integration
+* GTM model integration
+* model preprocessing
+* model artifacts
+* warranty policies
+* rule engine
+* document-processing pipeline
+* OCR/extraction pipeline
+* file storage
+* document hashing
+* duplicate detection
+* decision engine
+* reviewer queue
+* reviewer actions
+* audit history
+* frontend API client
+* React Query hooks
+* frontend routing
+* frontend authorization
+* tests
+* configuration
+* logging
+* error handling
+
+Determine what was actually implemented.
+
+Do not rely only on filenames or comments.
+
+Trace imports, calls, persistence, and runtime data flow.
+
+⸻
+
+STEP 2 — MAP THE ENTIRE CLAIM DECISION PIPELINE
+
+Trace the actual runtime flow for a claim:
+
+claim submission
+
+→ claim persistence
+
+→ document upload
+
+→ document storage
+
+→ SHA256 hashing
+
+→ OCR/extracted metadata
+
+→ Python model preprocessing
+
+→ Python prediction
+
+→ GTM preprocessing
+
+→ GTM prediction
+
+→ confidence normalization
+
+→ model comparison
+
+→ warranty policy resolution
+
+→ warranty expiry evaluation
+
+→ required-document evaluation
+
+→ serial-number consistency check
+
+→ contradiction detection
+
+→ repair authorization validation
+
+→ exclusion evaluation
+
+→ duplicate-document detection
+
+→ duplicate-claim detection
+
+→ final automated decision
+
+→ explanation generation
+
+→ decision persistence
+
+→ reviewer queue routing
+
+→ reviewer detail page
+
+→ reviewer action
+
+→ audit history
+
+→ final claim status
+
+Identify any stage that:
+
+* is disconnected,
+* runs in the wrong order,
+* silently fails,
+* uses stale data,
+* mutates source evidence,
+* overwrites historical values,
+* or produces inconsistent state.
+
+Fix all such problems.
+
+⸻
+
+STEP 3 — AUDIT FOR SECURITY AND DATA LEAKAGE
+
+Perform a serious security review.
+
+Do not treat frontend hiding as authorization.
+
+A. Cross-User Claim Leakage
+
+Verify that a normal claimant cannot retrieve:
+
+* another claimant’s claim,
+* another claimant’s documents,
+* another claimant’s prediction results,
+* another claimant’s duplicate matches,
+* another claimant’s reviewer comments,
+* another claimant’s personal information,
+* another claimant’s invoice numbers,
+* another claimant’s serial numbers.
+
+Test IDOR-style scenarios such as:
+
+GET /api/claims/123
+
+when user owns claim 122 but not 123.
+
+Repeat equivalent tests for:
+
+* documents
+* decisions
+* prediction endpoints
+* audit history
+* duplicate findings
+* reviewer endpoints
+
+Fix all authorization defects.
+
+⸻
+
+B. Reviewer/Admin Leakage
+
+Reviewers must only see information permitted by the application’s RBAC policy.
+
+Verify:
+
+* customers cannot access reviewer routes,
+* reviewers cannot gain admin-only capabilities,
+* admin-only actions cannot be triggered by modifying requests,
+* reviewer IDs are derived from JWT/session identity,
+* clients cannot impersonate another reviewer.
+
+Never trust fields such as:
+
+reviewer_id
+
+user_id
+
+role
+
+is_admin
+
+supplied by the frontend.
+
+⸻
+
+C. Duplicate Detection Privacy Leakage
+
+Duplicate detection is especially sensitive.
+
+A normal customer should NOT receive information such as:
+
+* another person’s claim ID,
+* another person’s name,
+* another person’s email,
+* another person’s address,
+* another person’s document,
+* another person’s invoice number,
+* another person’s serial number,
+* another person’s fault description.
+
+Customer-facing responses should expose only safe information such as:
+
+“Possible duplicate evidence detected.”
+
+Detailed related-claim information should be restricted to appropriately authorized reviewers/admins.
+
+Audit every duplicate-detection response.
+
+⸻
+
+D. Document Leakage
+
+Verify uploaded document access.
+
+Check:
+
+* direct file URLs,
+* predictable file paths,
+* static serving,
+* download endpoints,
+* document preview endpoints,
+* document IDs,
+* signed URLs if used.
+
+Ensure authorization is checked before returning any private document.
+
+Do not allow someone to access another claimant’s receipt merely by guessing:
+
+/uploads/receipt_123.pdf
+
+or changing a document ID.
+
+⸻
+
+E. Error Leakage
+
+Ensure production API errors do not expose:
+
+* stack traces,
+* filesystem locations,
+* database connection strings,
+* SQL statements containing sensitive values,
+* internal model paths,
+* environment variables,
+* secrets,
+* JWT secrets,
+* API keys,
+* AWS credentials,
+* storage credentials.
+
+Use controlled error responses.
+
+Detailed diagnostics may go to secure server logs, but not client responses.
+
+⸻
+
+F. Logging Leakage
+
+Search logging statements for sensitive information.
+
+Do not log:
+
+* passwords,
+* authentication tokens,
+* JWTs,
+* authorization headers,
+* secrets,
+* complete identity documents,
+* full uploaded documents,
+* unnecessary customer PII,
+* raw model input containing sensitive fields where unnecessary.
+
+Mask or omit sensitive values.
+
+⸻
+
+STEP 4 — AUDIT FOR MACHINE-LEARNING DATA LEAKAGE
+
+Audit the Python ML model and GTM model for ML leakage.
+
+Check both training code and inference code where available.
+
+A. Target Leakage
+
+Verify that model features do not contain fields that directly or indirectly reveal the final claim outcome.
+
+Potential dangerous features include:
+
+* final_decision
+* reviewer_decision
+* approved
+* rejected
+* claim_status after adjudication
+* payout_amount decided after review
+* fraud_confirmed
+* manual_review_result
+* resolution_reason
+* final_recommendation
+* post-review notes
+* reviewer comments
+* settlement status
+
+Remove or quarantine target-leaking features.
+
+⸻
+
+B. Temporal Leakage
+
+Verify that the prediction only uses information available at the time the prediction should have been made.
+
+Do not use future information such as:
+
+* reviewer decision
+* later repair records
+* subsequent claim status
+* future investigation findings
+* future payment information
+* post-resolution documents
+* later fraud confirmation
+
+Audit timestamps carefully.
+
+⸻
+
+C. Train/Test Leakage
+
+Inspect training pipelines for:
+
+* fitting preprocessing on the complete dataset,
+* scaling before splitting,
+* imputation before splitting,
+* feature selection before splitting,
+* oversampling before splitting,
+* duplicates across train/test,
+* claims from the same claimant appearing across inappropriate splits,
+* duplicate documents across splits,
+* leakage through grouped products/serials.
+
+Where appropriate, use:
+
+train-only fitting
+
+and
+
+group-aware or time-aware splitting.
+
+⸻
+
+D. Duplicate Leakage
+
+Check whether duplicate or near-identical claims occur in both training and validation/test sets.
+
+Look especially at:
+
+* serial number
+* invoice number
+* claimant ID
+* document hash
+* fault description
+* duplicated rows
+
+If found, fix the evaluation pipeline so reported performance is not artificially inflated.
+
+⸻
+
+E. Feature Leakage Between Models
+
+The Python model and GTM model are intended to operate independently.
+
+Verify that:
+
+* Python prediction is not fed into GTM,
+* GTM prediction is not fed into Python,
+* model comparison does not modify model predictions,
+* final decision output is not reused as model input,
+* reviewer decisions do not leak into later inference unless explicitly used for a retraining pipeline.
+
+The two model outputs must remain independently reproducible.
+
+⸻
+
+STEP 5 — AUDIT PREDICTION APIS
+
+Audit:
+
+POST /predict/python
+
+POST /predict/gtm
+
+or their actual repository equivalents.
+
+Verify:
+
+* both routes call different prediction services,
+* neither route accidentally calls the other model,
+* both use the expected preprocessing,
+* both validate request schemas,
+* both normalize labels consistently,
+* both handle missing values,
+* confidence values are valid,
+* model failures are explicit,
+* model versions are captured when available.
+
+Check class-label mappings.
+
+Prevent situations such as:
+
+Python:
+0 = valid
+
+GTM:
+0 = invalid
+
+while both are treated as identical labels.
+
+Create one canonical label mapping.
+
+Test:
+
+valid
+
+invalid
+
+manual_review
+
+and any legacy aliases.
+
+⸻
+
+STEP 6 — AUDIT CONFIDENCE HANDLING
+
+Check all model confidence calculations.
+
+Verify:
+
+0 <= confidence <= 1
+
+Check probability sums where appropriate.
+
+Do not fabricate probabilities from labels.
+
+If the model produces logits, convert correctly.
+
+If the model has no probability interface, represent this honestly rather than manufacturing confidence.
+
+Check:
+
+* rounding,
+* float serialization,
+* NaN,
+* infinity,
+* missing values,
+* empty distributions.
+
+Prevent NaN/Infinity from reaching JSON responses or decision logic.
+
+⸻
+
+STEP 7 — AUDIT MODEL COMPARISON ENGINE
+
+Verify:
+
+confidence_difference =
+abs(
+python_top_confidence
+-
+gtm_top_confidence
+)
+
+Check that top_confidence actually belongs to each model’s predicted top class.
+
+Audit statuses:
+
+* Strong Match
+* Acceptable Match
+* Weak Match
+* Model Disagreement
+* Uncertain Result
+
+Check for unreachable states.
+
+Check for overlapping threshold conditions.
+
+Check boundary values exactly.
+
+Example:
+
+if strong <= 0.10
+
+and acceptable < 0.20
+
+ensure 0.10 is not accidentally handled inconsistently.
+
+Move thresholds into centralized configuration if they remain hard-coded.
+
+Add tests for:
+
+* exact threshold boundaries,
+* same label,
+* different labels,
+* one low-confidence model,
+* both low confidence,
+* missing model output.
+
+⸻
+
+STEP 8 — AUDIT WARRANTY POLICY ENGINE
+
+Verify policies are genuinely configuration-driven.
+
+Search the codebase for duplicated hard-coded policy logic such as:
+
+if product == “electronics”:
+warranty = 24
+
+Rules should come from the configured warranty source.
+
+Audit at least three policies.
+
+Validate:
+
+* required keys,
+* warranty length,
+* exclusions,
+* required documents,
+* authorized repair requirements.
+
+Reject malformed policy definitions safely.
+
+Do not silently treat a missing policy as unrestricted coverage.
+
+Use explicit result such as:
+
+POLICY_NOT_FOUND
+
+and route ambiguous cases to review where appropriate.
+
+⸻
+
+STEP 9 — AUDIT WARRANTY DATE LOGIC
+
+Verify:
+
+warranty_expiry =
+purchase_date + applicable warranty duration
+
+Then:
+
+claim_date <= warranty_expiry
+
+Check:
+
+* leap years,
+* month arithmetic,
+* timezone conversion,
+* date vs datetime comparisons,
+* missing purchase date,
+* malformed date,
+* warranty boundary date.
+
+Confirm that a claim submitted exactly on the final warranty day is handled according to policy.
+
+Do not approximate 24 months as 24 × 30 days unless the policy explicitly defines it that way.
+
+⸻
+
+STEP 10 — AUDIT SERIAL NUMBER VERIFICATION
+
+Inspect serial normalization.
+
+Avoid destructive normalization that could cause false matches.
+
+Potential normalization:
+
+* trim surrounding whitespace,
+* normalize case where serial format is case-insensitive,
+* normalize documented separators when appropriate.
+
+Do NOT blindly remove arbitrary characters if they might distinguish serials.
+
+Compare all available sources:
+
+* claim
+* receipt
+* warranty card
+* product image
+* repair record
+
+Keep source provenance.
+
+A mismatch must identify which sources disagree.
+
+Do not overwrite one serial number with another.
+
+⸻
+
+STEP 11 — AUDIT CONTRADICTION DETECTION
+
+Verify at least:
+
+purchase_date > claim_date
+
+repair_date < purchase_date
+
+fault_date > claim_date
+
+different serial numbers
+
+different product models
+
+Audit whether missing data is mistakenly treated as contradictory.
+
+Distinguish:
+
+* contradiction,
+* missing evidence,
+* unknown,
+* confirmed consistent.
+
+Ensure contradictions have:
+
+* type
+* severity
+* evidence
+* source
+* timestamp where relevant
+
+⸻
+
+STEP 12 — AUDIT REQUIRED DOCUMENT CHECKS
+
+Verify required documents come directly from the applicable warranty policy.
+
+Do not maintain a second unrelated required-document list.
+
+Check aliases.
+
+Example:
+
+receipt
+
+purchase_receipt
+
+invoice
+
+must not accidentally be interpreted as completely unrelated if the application treats them as equivalent evidence.
+
+Use canonical document types.
+
+Check:
+
+* duplicates,
+* failed uploads,
+* corrupted documents,
+* documents awaiting processing.
+
+A document record existing in the DB should not automatically mean usable evidence exists.
+
+⸻
+
+STEP 13 — AUDIT UNAUTHORIZED REPAIR LOGIC
+
+Distinguish:
+
+* authorized
+* unauthorized
+* unknown
+* no repair
+
+Do not interpret missing repair-center data as confirmed unauthorized repair.
+
+Verify authorization data source.
+
+If repair-center verification cannot be performed, return an unknown state.
+
+Route meaningful uncertainty to manual review instead of creating false rejection.
+
+⸻
+
+STEP 14 — AUDIT EXCLUDED DAMAGE LOGIC
+
+Check policy exclusions.
+
+Avoid naive patterns such as:
+
+if “water” in description
+
+where this may create incorrect matches.
+
+Example:
+
+“Device tested for water resistance; no water damage found”
+
+must not automatically become water damage.
+
+Prefer structured damage labels if available.
+
+If using text matching:
+
+* normalize carefully,
+* handle negation,
+* keep matched evidence,
+* avoid silently forcing rejection from weak matches.
+
+⸻
+
+STEP 15 — AUDIT DOCUMENT HASHING
+
+Verify SHA256 is calculated over:
+
+actual file bytes
+
+NOT:
+
+* filename,
+* path,
+* base64 wrapper text when raw bytes are expected,
+* metadata.
+
+Confirm identical files always produce identical hashes.
+
+Confirm modified files produce different hashes.
+
+Add DB index on hash where appropriate.
+
+Check concurrent uploads.
+
+Prevent duplicate race conditions.
+
+If two identical uploads arrive simultaneously, the application should remain consistent.
+
+⸻
+
+STEP 16 — AUDIT CLAIM DUPLICATE DETECTION
+
+Inspect duplicate scoring.
+
+Signals may include:
+
+* serial number
+* invoice number
+* claimant
+* product
+* product model
+* fault description
+* dates
+* document hashes
+
+Verify:
+
+* normalization is appropriate,
+* weights are configurable,
+* no single weak fuzzy field creates a high duplicate score,
+* no sensitive data leaks through customer responses.
+
+Check database efficiency.
+
+Do not:
+
+SELECT * FROM claims
+
+and then compare every claim in Python for every request.
+
+Use candidate filtering and indexed queries.
+
+Check false positives.
+
+Examples:
+
+same product model alone
+
+should not imply duplicate claim.
+
+Same claimant + same product + matching invoice + matching document hash
+
+is much stronger evidence.
+
+⸻
+
+STEP 17 — AUDIT FINAL DECISION ENGINE
+
+Trace every decision branch.
+
+Supported outputs:
+
+* Likely Valid
+* Likely Invalid
+* Manual Review Required
+
+Ensure no unexpected status can escape.
+
+Search for:
+
+* default-to-valid behavior,
+* default-to-invalid behavior,
+* silent fallback decisions.
+
+Missing or failed evidence should not silently become approval.
+
+Check precedence.
+
+For example:
+
+model agreement = valid
+
+but
+
+warranty expired = true
+
+must not become Likely Valid merely because the models agree.
+
+Similarly:
+
+one model fails
+
+must not silently use the surviving prediction as if both models agreed.
+
+Use explicit precedence rules.
+
+⸻
+
+STEP 18 — AUDIT EXPLAINABILITY
+
+Every final decision should be reconstructable from stored evidence.
+
+For every decision verify that you can answer:
+
+* which Python prediction was used?
+* which GTM prediction was used?
+* what were their confidence values?
+* did the models agree?
+* what warranty policy applied?
+* which rules passed?
+* which rules failed?
+* what contradictions existed?
+* what duplicate indicators existed?
+* why was the final result selected?
+
+Do not generate explanations independently from the actual decision logic.
+
+Prevent explanation drift where:
+
+decision says Likely Invalid
+
+but explanation says warranty active and no issues found.
+
+Explanations must be derived from the same structured evidence used by the decision engine.
+
+⸻
+
+STEP 19 — AUDIT MANUAL REVIEW SYSTEM
+
+Verify reviewer queue correctness.
+
+Claims should enter manual review when appropriate.
+
+Check:
+
+* duplicate insertion into queue,
+* missing queue entries,
+* stale queue entries,
+* already-completed reviews still appearing as pending.
+
+Reviewer actions:
+
+* Approve
+* Reject
+* Request More Information
+* Override Automated Recommendation
+* Add Comment
+
+Verify each action.
+
+⸻
+
+STEP 20 — NEVER OVERWRITE MACHINE RESULTS
+
+This requirement is critical.
+
+Search for any update logic that modifies:
+
+* Python prediction
+* Python confidence
+* GTM prediction
+* GTM confidence
+* comparison result
+* automated recommendation
+
+after a human review.
+
+Reviewer decisions must be stored separately.
+
+Example conceptual structure:
+
+automated_decision = “Manual Review Required”
+
+reviewer_decision = “Approved”
+
+The first value must remain unchanged.
+
+Do not do:
+
+decision.status = reviewer_decision
+
+if that destroys the machine recommendation.
+
+Refactor if necessary.
+
+Preserve immutable historical evidence.
+
+⸻
+
+STEP 21 — AUDIT REVIEWER OVERRIDES
+
+Overrides must capture:
+
+* original automated recommendation,
+* reviewer decision,
+* reviewer identity,
+* reason,
+* timestamp.
+
+Require a reason for override.
+
+Prefer append-only audit records.
+
+Check concurrent reviewer actions.
+
+Prevent two reviewers from unknowingly finalizing the same claim simultaneously.
+
+Use appropriate:
+
+* optimistic locking,
+* row locking,
+* version fields,
+* transaction safeguards,
+
+depending on existing architecture.
+
+Return a conflict response where appropriate.
+
+⸻
+
+STEP 22 — DATABASE AUDIT
+
+Inspect schema and migrations.
+
+Check:
+
+* foreign keys
+* orphaned records
+* nullable fields
+* status constraints
+* duplicate rows
+* indexes
+* cascading deletes
+* JSON/JSONB usage
+* timestamps
+* timezone handling
+
+Check especially:
+
+* prediction result references
+* claim references
+* document hashes
+* review actions
+* duplicate findings
+* decision results
+
+Ensure deletion behavior does not accidentally destroy audit records required for compliance.
+
+Do not reset or recreate the production database as a shortcut.
+
+Create safe migrations.
+
+⸻
+
+STEP 23 — TRANSACTION AUDIT
+
+Identify multi-step operations requiring transactions.
+
+Examples:
+
+* claim evaluation
+* reviewer approval
+* reviewer rejection
+* override
+* request more information
+* duplicate finding creation
+* queue state updates
+
+Ensure partial failures cannot produce states such as:
+
+review_action = APPROVED
+
+while
+
+claim_status = UNDER_REVIEW
+
+Use transaction boundaries appropriately.
+
+Rollback on failure.
+
+⸻
+
+STEP 24 — AUDIT API INPUT VALIDATION
+
+Audit all new endpoints.
+
+Check:
+
+* malformed UUIDs/IDs,
+* missing JSON body,
+* wrong types,
+* unknown enums,
+* negative probabilities,
+* oversized strings,
+* malicious filenames,
+* empty comments,
+* invalid dates.
+
+Use explicit request schemas.
+
+Reject unexpected invalid values cleanly.
+
+Do not trust frontend validation.
+
+⸻
+
+STEP 25 — MASS ASSIGNMENT AUDIT
+
+Look for code patterns such as:
+
+Model(**request.json)
+
+or:
+
+setattr(model, key, value)
+
+for arbitrary client input.
+
+Prevent users from setting protected fields such as:
+
+* role
+* user_id
+* reviewer_id
+* decision
+* approved
+* model_prediction
+* audit fields
+* duplicate score
+* policy result
+
+Use allowlisted request schemas.
+
+⸻
+
+STEP 26 — SQL/ORM AUDIT
+
+Inspect queries for:
+
+* SQL injection
+* unsafe raw SQL
+* string-formatted SQL
+* unbounded queries
+* missing indexes
+* N+1 queries
+
+Use parameterized queries.
+
+Optimize reviewer queue and duplicate search.
+
+⸻
+
+STEP 27 — FILE UPLOAD AUDIT
+
+Check:
+
+* maximum file size
+* MIME validation
+* extension validation
+* path traversal
+* filename sanitization
+* storage permissions
+* duplicate filenames
+* malicious content
+* unsupported file types
+
+Never trust Content-Type alone.
+
+Do not execute uploaded files.
+
+Do not construct storage paths directly from untrusted filenames.
+
+⸻
+
+STEP 28 — FRONTEND SECURITY AUDIT
+
+Inspect React code.
+
+Verify:
+
+* no secrets exist in frontend environment variables,
+* no privileged decisions rely only on route guards,
+* API tokens are handled consistently,
+* customer UI does not accidentally receive reviewer-only data,
+* API error details are not dumped raw to the screen.
+
+Remember:
+
+frontend route protection is UX,
+
+backend authorization is security.
+
+⸻
+
+STEP 29 — FRONTEND/BACKEND CONTRACT AUDIT
+
+Compare actual backend responses against frontend expectations.
+
+Check fields such as:
+
+prediction
+
+prediction_class
+
+top_confidence
+
+confidence_difference
+
+status
+
+decision
+
+supporting_evidence
+
+problems
+
+required_action
+
+duplicate_risk
+
+contradictions
+
+review_status
+
+Look for naming mismatches such as:
+
+manualReview
+
+vs
+
+manual_review
+
+or:
+
+topConfidence
+
+vs
+
+top_confidence.
+
+Fix schema mismatches systematically.
+
+⸻
+
+STEP 30 — REACT QUERY AUDIT
+
+Inspect query keys and invalidations.
+
+Check that reviewer actions invalidate/refetch:
+
+* reviewer queue
+* claim details
+* claim history
+* dashboard statistics
+
+Prevent stale UI.
+
+Avoid duplicate requests where possible.
+
+Handle:
+
+* loading
+* error
+* empty
+* success
+
+states correctly.
+
+⸻
+
+STEP 31 — AUDIT RACE CONDITIONS
+
+Test simultaneous operations.
+
+Examples:
+
+* same claim evaluated twice,
+* same document uploaded twice,
+* two reviewers approve/reject simultaneously,
+* duplicate detection runs while claim changes,
+* policy changes during evaluation.
+
+Use idempotency or locking where required.
+
+Avoid duplicate prediction and decision rows where one active evaluation is intended.
+
+⸻
+
+STEP 32 — AUDIT IDEMPOTENCY
+
+Determine which actions should be safe to retry.
+
+Examples:
+
+* evaluate claim
+* calculate document hash
+* enqueue review
+* retry prediction after transient failure
+
+Retries should not create uncontrolled duplicate records.
+
+Use:
+
+* unique constraints,
+* evaluation IDs,
+* status guards,
+* idempotency keys,
+
+where appropriate.
+
+⸻
+
+STEP 33 — AUDIT CACHING AND STALE DATA
+
+If policies or models are cached, verify cache invalidation.
+
+Do not keep outdated warranty configuration indefinitely after policy updates.
+
+If model instances are cached for performance, ensure:
+
+* correct model version,
+* thread/process safety,
+* no per-request mutable state leaks between users.
+
+This is especially important in Flask workers.
+
+⸻
+
+STEP 34 — AUDIT CROSS-REQUEST STATE LEAKAGE
+
+Search for unsafe mutable globals.
+
+Example dangerous pattern:
+
+current_claim = {}
+
+last_prediction = None
+
+shared_prediction_context = {}
+
+Global mutable state can leak information between concurrent requests.
+
+Model objects may be global if safely immutable/thread-safe, but request-specific data must not be shared globally.
+
+Fix all cross-request state leakage.
+
+⸻
+
+STEP 35 — AUDIT CACHE KEY LEAKAGE
+
+If Redis or another cache exists, verify keys include appropriate user/claim scope.
+
+Bad:
+
+claim_decision
+
+Better conceptual key:
+
+claim_decision:{claim_id}
+
+and authorization must still occur independently.
+
+Do not rely on cache keys as authorization.
+
+Ensure one customer’s cached response cannot be returned to another.
+
+⸻
+
+STEP 36 — AUDIT MODEL INSTANCE SAFETY
+
+Check whether Python/GTM model wrappers retain request data.
+
+Avoid:
+
+self.current_claim = claim
+
+inside shared singleton model services unless safely reset and concurrency-safe.
+
+Inference should ideally use local request variables.
+
+Test concurrent model calls.
+
+⸻
+
+STEP 37 — AUDIT FAILURE BEHAVIOR
+
+Simulate:
+
+* Python model unavailable
+* GTM unavailable
+* both unavailable
+* policy file missing
+* invalid YAML
+* database unavailable
+* document storage unavailable
+* OCR failure
+* duplicate service failure
+
+The system must fail safely.
+
+Never silently convert infrastructure failure into:
+
+Likely Valid
+
+or
+
+Likely Invalid.
+
+Use:
+
+Manual Review Required
+
+or an explicit processing failure state where appropriate.
+
+⸻
+
+STEP 38 — AUDIT TIMEZONE CONSISTENCY
+
+Ensure timestamps are consistent.
+
+Prefer UTC persistence.
+
+Convert for display as needed.
+
+Check:
+
+* claim dates
+* model execution time
+* reviewer actions
+* warranty dates
+* repair dates
+* audit entries
+
+Avoid comparing naive and timezone-aware datetimes.
+
+⸻
+
+STEP 39 — AUDIT ENUM AND STATUS CONSISTENCY
+
+Find every claim/review status.
+
+Prevent near-duplicate states such as:
+
+MANUAL_REVIEW
+
+manual_review
+
+manual-review
+
+PendingReview
+
+pending_review
+
+Use canonical enums/constants.
+
+Migrate old values if required.
+
+⸻
+
+STEP 40 — TEST FOR PRIVILEGE ESCALATION
+
+Explicitly test:
+
+customer → reviewer endpoint
+
+customer → admin endpoint
+
+reviewer → admin-only action
+
+unauthenticated → protected endpoint
+
+expired token
+
+tampered token
+
+missing token
+
+wrong resource owner
+
+Document and fix any failures.
+
+⸻
+
+STEP 41 — TEST IDOR / RESOURCE OWNERSHIP
+
+Attempt access to another user’s:
+
+claim
+
+document
+
+prediction result
+
+decision explanation
+
+review history
+
+duplicate warning
+
+Ensure authorization fails appropriately.
+
+Add automated regression tests.
+
+⸻
+
+STEP 42 — TEST SENSITIVE RESPONSE FILTERING
+
+Inspect serialized API responses.
+
+Ensure ORM serialization is not accidentally exposing fields such as:
+
+password_hash
+
+internal_notes
+
+storage_path
+
+reviewer_private_notes
+
+raw_model_features
+
+internal_duplicate_candidates
+
+admin-only flags
+
+secret configuration
+
+Use explicit response schemas.
+
+Avoid generic:
+
+model.dict
+
+serialization.
+
+⸻
+
+STEP 43 — TEST MODEL LEAKAGE SCENARIOS
+
+Create regression tests proving model inputs exclude:
+
+* final decision
+* reviewer result
+* payout result
+* fraud confirmation created after adjudication
+* future events
+
+Where training code exists, test preprocessing pipeline behavior.
+
+⸻
+
+STEP 44 — TEST COMPLETE DECISION SCENARIOS
+
+Create end-to-end tests for at least:
+
+Scenario A — Valid Claim
+
+* warranty active
+* documents complete
+* serial numbers agree
+* no exclusions
+* no duplicate indicators
+* models agree valid
+* sufficiently confident
+
+Expected:
+
+Likely Valid
+
+⸻
+
+Scenario B — Expired Warranty
+
+* models predict valid
+* warranty expired
+
+Verify deterministic rule precedence.
+
+⸻
+
+Scenario C — Model Disagreement
+
+Python:
+
+valid 0.82
+
+GTM:
+
+invalid 0.77
+
+Expected:
+
+Manual Review Required
+
+with explanation describing model disagreement.
+
+⸻
+
+Scenario D — Serial Conflict
+
+Claim serial:
+
+ABC123
+
+Receipt:
+
+ABC128
+
+Expected:
+
+contradiction stored
+
+and appropriate manual review outcome.
+
+⸻
+
+Scenario E — Missing Required Document
+
+Policy requires:
+
+receipt
+
+serial_photo
+
+Only receipt exists.
+
+Verify missing document handling.
+
+⸻
+
+Scenario F — Duplicate Document
+
+Two claims upload byte-identical evidence.
+
+Verify SHA256 match.
+
+Verify privacy-safe customer response.
+
+Verify reviewer details.
+
+⸻
+
+Scenario G — One Model Failure
+
+Python succeeds.
+
+GTM unavailable.
+
+Ensure Python output remains stored.
+
+Do not fabricate GTM result.
+
+Expected conservative/manual handling.
+
+⸻
+
+Scenario H — Reviewer Override
+
+Automated recommendation:
+
+Likely Invalid
+
+Reviewer:
+
+Approve
+
+Verify:
+
+automated recommendation unchanged
+
+reviewer action stored separately
+
+override reason stored
+
+audit history complete.
+
+⸻
+
+STEP 45 — PERFORMANCE AUDIT
+
+Check:
+
+* model loading
+* database query counts
+* duplicate candidate search
+* reviewer queue pagination
+* document queries
+* serialization
+
+Models should not reload from disk on every request unless unavoidable.
+
+Do not prematurely optimize at the expense of correctness.
+
+Add indexes only where justified.
+
+⸻
+
+STEP 46 — CLEAN UP DUPLICATE IMPLEMENTATIONS
+
+Search for multiple competing versions of:
+
+PredictionService
+
+DecisionEngine
+
+WarrantyRuleEngine
+
+DuplicateDetector
+
+ReviewerService
+
+Do not leave both old and new implementations active accidentally.
+
+Determine which one is canonical.
+
+Migrate callers.
+
+Remove dead code only when safe.
+
+⸻
+
+STEP 47 — RUN STATIC AND RUNTIME CHECKS
+
+Use the tools already available in the repository.
+
+Run appropriate checks such as:
+
+* Python syntax compilation
+* type checks if configured
+* linting
+* backend unit tests
+* integration tests
+* frontend type checking
+* frontend linting
+* frontend build
+* migration verification
+
+Do not install a completely unrelated tooling stack merely for this audit.
+
+Fix errors caused by the implementation.
+
+⸻
+
+STEP 48 — VERIFY DATABASE MIGRATIONS
+
+Test migrations on a non-production database.
+
+Verify:
+
+upgrade
+
+and, where project policy supports it:
+
+downgrade
+
+Check that existing data remains readable.
+
+Do not use destructive migration shortcuts.
+
+⸻
+
+STEP 49 — END-TO-END MANUAL TRACE
+
+After automated testing, manually trace at least one representative claim through the code path.
+
+Document:
+
+* request
+* stored claim
+* document hashes
+* prediction outputs
+* comparison
+* policy
+* rule results
+* duplicates
+* decision
+* explanation
+* reviewer queue
+* reviewer action
+* final status
+* audit history
+
+Confirm actual persistence at every meaningful step.
+
+⸻
+
+STEP 50 — FIX FIRST, REPORT SECOND
+
+Do not stop at a vulnerability report.
+
+For every issue:
+
+1. identify root cause,
+2. implement the fix,
+3. add or update regression tests,
+4. rerun affected tests,
+5. verify integration.
+
+If an issue cannot safely be fixed without product/business clarification, isolate it and clearly explain the blocker.
+
+Do not invent requirements.
+
+⸻
+
+REQUIRED FINAL REPORT
+
+After completing the audit and fixes, produce a structured report.
+
+1. Executive Summary
+
+Summarize:
+
+* what was audited
+* critical findings
+* major fixes
+* current implementation health
+
+Do not claim production readiness unless verification supports it.
+
+⸻
+
+2. Bugs Found and Fixed
+
+For each significant issue include:
+
+* severity
+* affected component
+* root cause
+* fix
+* test added
+
+⸻
+
+3. Security Vulnerabilities
+
+Separate:
+
+* Critical
+* High
+* Medium
+* Low
+
+Only include real findings.
+
+Do not inflate severity for drama.
+
+⸻
+
+4. Leakage Audit
+
+Report separately on:
+
+User data leakage
+
+Cross-tenant leakage
+
+Document leakage
+
+Logging leakage
+
+API response leakage
+
+Cross-request state leakage
+
+Machine-learning target leakage
+
+Temporal leakage
+
+Train/test leakage
+
+Duplicate leakage
+
+Clearly state what was tested.
+
+⸻
+
+5. Prediction Audit
+
+Report:
+
+* Python model status
+* GTM model status
+* preprocessing consistency
+* label mapping
+* confidence correctness
+* independence
+
+⸻
+
+6. Model Comparison Audit
+
+Report:
+
+* thresholds
+* boundary handling
+* disagreement handling
+* uncertainty handling
+
+⸻
+
+7. Warranty Engine Audit
+
+Report:
+
+* configuration source
+* validation
+* policies verified
+* hard-coded remnants found/fixed
+
+⸻
+
+8. Rule Engine Audit
+
+Report results for:
+
+* warranty expiry
+* serial verification
+* contradiction detection
+* missing documents
+* repair authorization
+* exclusions
+
+⸻
+
+9. Duplicate Detection Audit
+
+Report:
+
+* document SHA256 behavior
+* claim matching
+* DB efficiency
+* false-positive protections
+* privacy protections
+
+⸻
+
+10. Decision Engine Audit
+
+Report:
+
+* precedence rules
+* failure handling
+* deterministic rule behavior
+* manual review routing
+
+⸻
+
+11. Explanation Audit
+
+Confirm explanations are derived from the same structured evidence used for decisions.
+
+⸻
+
+12. Manual Review Audit
+
+Confirm:
+
+* queue works
+* actions work
+* audit history works
+* automated results remain immutable
+* override reasons are preserved
+
+⸻
+
+13. Authentication and RBAC Audit
+
+List roles tested and access cases verified.
+
+⸻
+
+14. Database Changes
+
+List:
+
+* migrations created
+* constraints added
+* indexes added
+* schema corrections
+
+⸻
+
+15. Frontend Fixes
+
+List:
+
+* API contract fixes
+* stale cache fixes
+* permission fixes
+* loading/error-state fixes
+* reviewer UI fixes
+
+⸻
+
+16. Tests Added
+
+List test files and scenarios.
+
+⸻
+
+17. Test Results
+
+Provide actual results for:
+
+* backend
+* frontend
+* integration
+* migration
+* security regression tests
+
+Do not claim tests passed if they were not executed.
+
+⸻
+
+18. Remaining Risks
+
+Clearly distinguish:
+
+* resolved
+* partially resolved
+* blocked
+* intentionally deferred
+
+⸻
+
+COMPLETION CRITERIA
+
+The audit is not complete until:
+
+* Python and GTM predictions are independently verified,
+* confidence calculations are verified,
+* model comparison boundaries are tested,
+* warranty policies are configuration-driven,
+* rule checks are verified,
+* SHA256 hashes actual file contents,
+* duplicate detection is privacy-safe,
+* final decisions are reproducible,
+* explanations match actual evidence,
+* machine results remain immutable,
+* reviewer actions are audited,
+* JWT/RBAC is verified server-side,
+* IDOR checks are tested,
+* customer data cannot leak across claims/users,
+* sensitive documents are access-controlled,
+* logs do not expose sensitive data,
+* cross-request state leakage is eliminated,
+* target and temporal ML leakage are checked,
+* train/test leakage is checked where training code exists,
+* frontend/backend schemas match,
+* migrations are safe,
+* tests pass,
+* and at least one complete claim workflow is verified end to end.
+
+Do not merely audit the intended architecture.
+
+Audit the code that actually exists.
+
+Fix defects in the repository, add regression tests, rerun validation, and then report exactly what was verified.
