@@ -28,7 +28,7 @@ def test_access_control(client, accounts, claims):
     assert get(client, f"/api/dashboard/customer?user_id={accounts['customer']}", "admin").status_code == 200
     assert get(client, "/api/dashboard/customer?user_id=99999", "admin").status_code == 400
     assert get(client, "/api/dashboard/customer?user_id=99999").json["claims"]["total"] == 1
-    assert client.get("/dashboard/customer").status_code == 200
+    assert client.get("/dashboard/customer").status_code == 404
 
 
 def test_customer_warranties_trends_and_actions(client, app, accounts, claims):

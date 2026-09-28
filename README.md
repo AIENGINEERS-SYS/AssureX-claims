@@ -37,14 +37,16 @@ Create an administrator when needed:
 python -m flask --app backend:create_app create-admin
 ```
 
-Start the backend and build or run the frontend using the project’s normal frontend command:
+Start the API and frontend as separate processes:
 
 ```bash
-python -m flask --app backend:create_app run
-npm --prefix frontend run build
+waitress-serve --listen=127.0.0.1:8000 --call backend:create_app
+npm --prefix frontend run dev
 ```
 
-The React application uses the configured API base URL. During development, use its existing development-server configuration if present in your local frontend setup.
+Open `http://localhost:5173`. Copy `frontend/.env.example` to `frontend/.env.local` to configure the public API URL. Flask serves JSON under `/api` only and permits requests from the origins in `FRONTEND_ORIGINS`.
+
+For the two-service Railway configuration, see [documentation/railway-deployment.md](documentation/railway-deployment.md).
 
 ## Register or log in
 

@@ -10,6 +10,17 @@ def init_middleware(app):
     def error(code, message, status, **extra):
         return jsonify(error={"code": code, "message": message, **extra}), status
 
+    def allowed_origin():
+        origin = request.headers.get("Origin", "").rstrip("/")
+        return origin if origin in current_app.config["FRONTEND_ORIGINS"] else None
+
+    @app.before_request
+    def cors_preflight():
+        if request.method == "OPTIONS" and request.path.startswith("/api/"):
+            if not allowed_origin():
+                return error("origin_not_allowed", "This frontend origin is not allowed.", 403)
+            return current_app.make_default_options_response()
+
     @app.errorhandler(ValidationError)
     def validation(exc):
         db.session.rollback()
@@ -51,10 +62,12 @@ def init_middleware(app):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
-        if request.blueprint == "web":
-            response.headers["Content-Security-Policy"] = (
-                "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
-                "img-src 'self' blob:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+        origin = allowed_origin() if request.path.startswith("/api/") else None
+        if origin:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            response.vary.add("Origin")
         response.headers["Referrer-Policy"] = "same-origin"
         if app.config["ASSUREX_ENV"] == "production":
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"

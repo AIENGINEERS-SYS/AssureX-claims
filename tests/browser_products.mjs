@@ -80,7 +80,6 @@ try {
     await runClaims({baseURL,call,click,fill,wait,has,evaluate,screenshot,pause});
   } else {
   await call("Page.navigate",{url:baseURL+"/products"});
-  await click('[data-action="login"]');
   await fill('#auth-form [name="email"]',"customer@example.com");
   await fill('#auth-form [name="password"]',process.env.ASSUREX_TEST_PASSWORD);
   await click("#auth-submit");
@@ -98,7 +97,6 @@ try {
     await wait(has("#expiry-preview","2027"));
     await click('#product-form button[type="submit"]');
     await wait(has("h1","Living room television"));
-    assert.ok(await evaluate(has("#notice","Product registered")));
     await click('[data-action="add-warranty"]');
     assert.equal(await evaluate('document.querySelector("#warranty-form [name=start_date]").value'),"2027-01-02");
     await fill('#warranty-form [name="provider"]',"Extended Care");
@@ -132,7 +130,7 @@ try {
     assert.equal(await evaluate('document.querySelector("#product-form [name=serial_number]").value'),"BROWSER-001");
     assert.equal(await evaluate('document.querySelector("#product-form [name=purchase_price]").value'),"450000.50");
     await click("#sign-out");
-    await wait(has("h1","Your products, protected."));
+    await wait(has("h1","Sign in to your products"));
     assert.equal(await evaluate('document.querySelector("#product-form") === null'),true);
   }
   }

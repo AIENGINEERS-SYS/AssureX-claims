@@ -1,8 +1,7 @@
 import React, {useEffect, useState} from 'react';
-import {createRoot} from 'react-dom/client';
 import {BrowserRouter, Link, Route, Routes, useNavigate, useParams} from 'react-router-dom';
 import {useForm} from 'react-hook-form';
-import {api, allPages, errorMessage, onExpired, setSession} from './api';
+import {api, allPages, errorMessage, getSession, onExpired, setSession} from './api';
 import {DocumentsStep, ReviewStep} from './components';
 import Wizard from './Wizard';
 import './styles.css';
@@ -65,8 +64,8 @@ function ClaimDetails() {
     <div className="panel"><ReviewStep claim={claim} product={claim.product} values={claim}/></div></> : !error && <p role="status">Loading claim…</p>}</>;
 }
 
-function App() {
-  const [user, setUser] = useState(null);
+export function App({basePath = '/claims'} = {}) {
+  const [user, setUser] = useState(() => getSession()?.user || null);
   const [needsLogin, setNeedsLogin] = useState(false);
   useEffect(() => {onExpired(() => setNeedsLogin(true)); return () => onExpired(() => {});}, []);
   async function signOut() {
@@ -76,7 +75,7 @@ function App() {
     try {await api.post('/auth/logout');} catch { /* Local session still ends. */ }
     finally {setSession(null); setUser(null); setNeedsLogin(false);}
   }
-  return <BrowserRouter basename="/claims"><a className="skip-link" href="#main">Skip to content</a><header><a className="brand" href="/products">Assure<span>X</span></a>
+  return <BrowserRouter basename={basePath}><a className="skip-link" href="#main">Skip to content</a><header><a className="brand" href="/products">Assure<span>X</span></a>
     <nav aria-label="Main navigation"><a href="/products">Products</a><Link to="/" aria-current="page">Claims</Link></nav>
     {user && <div className="account"><span>{user.full_name}</span><button onClick={signOut}>Sign out</button></div>}</header>
     {needsLogin && user && <div className="reauth" role="dialog" aria-modal="true" aria-label="Sign in again"><Login expectedUser={user} signedIn={() => setNeedsLogin(false)}/></div>}
@@ -84,4 +83,3 @@ function App() {
       <Route path="/:claimId" element={<ClaimDetails/>}/><Route path="*" element={<p>Page not found. <Link to="/">My claims</Link></p>}/></Routes> : <Login signedIn={setUser}/>}</main>
     <footer>AssureX · Product protection, made simple</footer></BrowserRouter>;
 }
-createRoot(document.getElementById('root')).render(<App/>);

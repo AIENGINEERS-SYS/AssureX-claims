@@ -3,7 +3,7 @@ import {BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, 
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {Bell, Box, ChevronRight, ClipboardList, FileText, LayoutDashboard, LogOut,
   Plus, Search, Shield, ShieldAlert, Users} from 'lucide-react';
-import {api, errorMessage, onExpired, setSession} from '../claims/api';
+import {api, errorMessage, getSession, onExpired, setSession} from '../claims/api';
 
 const Chart = React.lazy(() => import('./Charts'));
 const label = value => String(value ?? '').replaceAll('_', ' ').replace(/\b\w/g, char => char.toUpperCase());
@@ -204,7 +204,7 @@ function Shell({user, signOut, children}) {
 }
 
 function DashboardApp() {
-  const [user, setUser] = useState(null), client = useQueryClient(), navigate = useNavigate();
+  const [user, setUser] = useState(() => getSession()?.user || null), client = useQueryClient(), navigate = useNavigate();
   useEffect(() => {onExpired(() => {client.clear();setUser(null);navigate('/');});return () => onExpired(() => {});}, [client,navigate]);
   async function signOut() {try {await api.post('/auth/logout');} catch {/* Session still cleared locally. */}setSession(null);setUser(null);client.clear();navigate('/');}
   if (!user) return <Login onLogin={setUser}/>;

@@ -1,8 +1,14 @@
 import axios from 'axios';
 
-export const api = axios.create({baseURL: '/api', timeout: 60000});
+const configuredApi = import.meta.env.VITE_API_URL?.trim();
+if (import.meta.env.PROD && !configuredApi) {
+  throw new Error('VITE_API_URL must be configured for the standalone frontend.');
+}
+const apiBase = (configuredApi || 'http://127.0.0.1:8000/api').replace(/\/$/, '');
+export const api = axios.create({baseURL: apiBase, timeout: 60000});
 let tokens = null, refreshing = null, expired = () => {};
 export function setSession(value) { tokens = value; }
+export function getSession() { return tokens; }
 export function onExpired(callback) { expired = callback; }
 api.interceptors.request.use(config => {
   if (tokens) config.headers.Authorization = `Bearer ${tokens.access_token}`;
@@ -13,7 +19,7 @@ api.interceptors.response.use(response => response, async error => {
   if (error.response?.status === 401 && tokens && !config._retried && !config.url.startsWith('/auth/')) {
     config._retried = true;
     try {
-      if (!refreshing) refreshing = axios.post('/api/auth/refresh', {}, {
+      if (!refreshing) refreshing = axios.post(`${apiBase}/auth/refresh`, {}, {
         headers: {Authorization: `Bearer ${tokens.refresh_token}`}, timeout: 15000,
       }).then(({data}) => {tokens = data;}).finally(() => {refreshing = null;});
       await refreshing;

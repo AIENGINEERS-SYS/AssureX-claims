@@ -32,14 +32,19 @@ def _boolean(name, default=False):
 
 
 def settings():
+    environment = os.getenv("ASSUREX_ENV", "development")
     url = make_url(database_url())
     if url.drivername == "sqlite" and url.database not in (None, "", ":memory:"):
         url = url.set(database=str((ROOT / url.database).resolve()))
     document_size = _integer("MAX_DOCUMENT_SIZE_MB", 10)
     storage_backend = os.getenv("DOCUMENT_STORAGE_BACKEND", os.getenv("CLAIM_STORAGE", "local"))
     storage_path = os.getenv("DOCUMENT_STORAGE_PATH", os.getenv("UPLOAD_FOLDER", str(ROOT / "instance" / "uploads")))
+    default_origins = "http://localhost:5173,http://127.0.0.1:5173" if environment == "development" else ""
+    frontend_origins = tuple(origin.strip().rstrip("/") for origin in
+        os.getenv("FRONTEND_ORIGINS", default_origins).split(",") if origin.strip())
     return {
-        "ASSUREX_ENV": os.getenv("ASSUREX_ENV", "development"),
+        "ASSUREX_ENV": environment,
+        "FRONTEND_ORIGINS": frontend_origins,
         "SQLALCHEMY_DATABASE_URI": url.render_as_string(hide_password=False),
         "SQLALCHEMY_TRACK_MODIFICATIONS": False,
         "SQLALCHEMY_ENGINE_OPTIONS": {"pool_pre_ping": True},
@@ -113,3 +118,6 @@ def validate_config(app):
             raise RuntimeError("Production requires PostgreSQL")
         if not app.config.get("RATELIMIT_ENABLED", True) or not app.config["RATELIMIT_STORAGE_URI"].startswith(("redis://", "rediss://")):
             raise RuntimeError("Production requires a shared Redis rate-limit store")
+        origins = app.config["FRONTEND_ORIGINS"]
+        if not origins or "*" in origins or any(not origin.startswith("https://") for origin in origins):
+            raise RuntimeError("Production FRONTEND_ORIGINS must contain explicit HTTPS origins")

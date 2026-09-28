@@ -9,7 +9,7 @@ from backend.db import Base
 from backend.db.models import (AuditLog, Claim, Document, GTMPrediction, ModelVersion,
                                Product, PythonPrediction, Review, RuleResult, User, Warranty)
 from backend.db.services import create_claim, record_prediction
-from backend.db.session import get_engine, session_factory
+from backend.db.session import database_url, get_engine, session_factory
 from backend.schemas.records import UserRead
 
 
@@ -42,6 +42,12 @@ def graph(db):
     claim = create_claim(db, user_id=user.id, product_id=product.id, warranty_id=warranty.id,
                          fault_date=date(2026, 3, 1), fault_type="power", fault_description="Not powering on")
     return user, product, warranty, claim
+
+
+@pytest.mark.parametrize("scheme", ["postgres://", "postgresql://"])
+def test_railway_postgres_urls_use_psycopg3(monkeypatch, scheme):
+    monkeypatch.setenv("DATABASE_URL", f"{scheme}user:password@example.invalid/assurex")
+    assert database_url().startswith("postgresql+psycopg://")
 
 
 def test_tables_and_relationships(db):

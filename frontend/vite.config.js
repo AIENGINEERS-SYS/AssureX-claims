@@ -1,13 +1,10 @@
 import {defineConfig} from 'vite';
-import {fileURLToPath} from 'node:url';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
+  plugins: [tailwindcss()],
   build: {
-    outDir: 'static/claims',
+    outDir: 'dist',
     emptyOutDir: true,
-    rollupOptions: {
-      input: fileURLToPath(new URL('./src/claims/main.jsx', import.meta.url)),
-      output: {entryFileNames: 'claims.js', assetFileNames: 'claims.[ext]'},
-    },
   },
 });

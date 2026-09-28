@@ -11,14 +11,15 @@ From the repository root (activate the Python virtual environment first):
 ```bash
 pip install -r requirements.txt
 npm --prefix frontend ci
-npm --prefix frontend run build
 python -m flask --app backend:create_app db upgrade
-python -m flask --app backend:create_app run
+waitress-serve --listen=127.0.0.1:8000 --call backend:create_app
+# In a second terminal:
+npm --prefix frontend run dev
 ```
 
-On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`. Set `JWT_SECRET_KEY` as described in `authentication.md`. The frontend is served by Flask at the same origin; no CDN, CORS allowance or separate frontend server is required. `npm --prefix frontend run watch` rebuilds during development. Build output is ignored by Git and must be included in deployment artifacts. Node 22.12+ is supported.
+On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`. Set `JWT_SECRET_KEY` as described in `authentication.md`, copy `frontend/.env.example` to `frontend/.env.local`, and open `http://localhost:5173/claims`. The Vite frontend calls the Flask API directly using `VITE_API_URL`; Flask allows only origins listed in `FRONTEND_ORIGINS`. Node 22+ is supported.
 
-Sign in with a customer account. Tokens are held in memory, not localStorage. Reloading asks for sign-in again and resumes a saved draft through its URL. Expired access tokens are refreshed through the existing rotating JWT flow; if reauthentication is needed, the form stays mounted behind a sign-in dialog. Products and claims currently use separate page sessions.
+Sign in with a customer account. Tokens are held in memory, not localStorage. Reloading asks for sign-in again and resumes a saved draft through its URL. Expired access tokens are refreshed through the existing rotating JWT flow; if reauthentication is needed, the form stays mounted behind a sign-in dialog. Internal navigation between products, claims and dashboards shares the in-memory session.
 
 ## Folder structure and component responsibilities
 
@@ -33,8 +34,9 @@ backend/
   services/claim_storage.py           File parsing, private local and S3 adapters
 frontend/
   package.json, package-lock.json     Reproducible React build dependencies
-  vite.config.js                     Bundles local assets for Flask
-  templates/claims.html               Same-origin application shell
+  index.html, src/main.jsx            Standalone Vite SPA entrypoint
+  src/App.jsx                         Product/claim/dashboard feature routing
+  vite.config.js, Staticfile          Production build and SPA fallback
   src/claims/
     main.jsx                         Routes, customer login, claim list and confirmation
     Wizard.jsx                       Four-step orchestration, autosave, mutation queue

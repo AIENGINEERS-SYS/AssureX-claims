@@ -1,0 +1,62 @@
+@import '../../static/products.css';
+
+.products-auth {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #f5f7f5;
+}
+
+.auth-panel {
+  width: min(100%, 460px);
+  padding: 32px;
+}
+
+.auth-panel label {
+  margin-top: 16px;
+}
+
+.auth-panel .full-width {
+  width: 100%;
+  margin-top: 22px;
+}
+
+.secondary-nav {
+  margin-top: 8px;
+  background: transparent;
+  border-color: transparent;
+}
+
+.back-link,
+.danger-zone button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #132c3566;
+  backdrop-filter: blur(3px);
+}
+
+.warranty-modal {
+  width: min(94vw, 700px);
+  max-height: 90vh;
+  overflow: auto;
+  padding: 30px;
+  border: 1px solid #dce5df;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 20px 80px #122f3440;
+}
+
+.warranty-modal .form-actions {
+  margin: 20px -30px -30px;
+}
