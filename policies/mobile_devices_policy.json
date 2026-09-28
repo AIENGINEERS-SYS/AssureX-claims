@@ -1,0 +1,114 @@
+{
+  "version": "2026.09",
+  "code": "mobile_devices",
+  "policy_name": "AssureX Mobile Device Warranty Policy",
+  "product_category": "Mobile Devices",
+  "categories": [
+    "mobile",
+    "mobile device",
+    "mobile devices",
+    "phone",
+    "smartphone",
+    "tablet"
+  ],
+  "coverage_duration": {
+    "months": 12
+  },
+  "warranty_months": 12,
+  "warranty_start_conditions": {
+    "basis": "purchase_date",
+    "description": "Coverage begins on the verified purchase date. IMEI or serial evidence is required to bind the device to the warranty record."
+  },
+  "covered_faults": [
+    "manufacturing_defect",
+    "charging_failure",
+    "camera_failure",
+    "speaker_or_microphone_failure",
+    "display_failure_without_external_damage",
+    "battery_failure_not_caused_by_misuse",
+    "software_or_firmware_failure",
+    "network_failure"
+  ],
+  "exclusions": [
+    "water damage",
+    "liquid damage",
+    "broken screen",
+    "intentional damage",
+    "misuse",
+    "physical impact",
+    "wrong voltage",
+    "tampered imei",
+    "tampered serial number",
+    "unauthorized repair"
+  ],
+  "claim_reporting_period_days": 30,
+  "repair_conditions": {
+    "prior_repairs_must_be_declared": true,
+    "authorized_repair_required": true,
+    "unauthorized_repair_invalidates": true,
+    "imei_or_serial_must_remain_legible": true
+  },
+  "authorized_service_centre_requirements": {
+    "required": true,
+    "evidence": [
+      "repair_report",
+      "service_center_name",
+      "repair_date",
+      "authorized_service_center"
+    ]
+  },
+  "replacement_conditions": [
+    "A covered manufacturing defect is confirmed and authorized repair cannot restore normal operation.",
+    "A repeated covered fault remains after an authorized repair.",
+    "Replacement or equivalent remedy requires reviewer approval."
+  ],
+  "grace_period_days": 0,
+  "mandatory_documents": [
+    "receipt",
+    "serial_number_image",
+    "product_image",
+    "fault_evidence"
+  ],
+  "required_documents": [
+    "receipt",
+    "serial_number_image",
+    "product_image",
+    "damage_evidence"
+  ],
+  "optional_documents": [
+    "warranty_card",
+    "diagnostic_report",
+    "repair_report"
+  ],
+  "hard_fail_rules": [
+    "warranty_expired_before_claim_submission",
+    "confirmed_liquid_or_physical_damage_exclusion",
+    "confirmed_unauthorized_repair_when_policy_invalidates_coverage",
+    "confirmed_tampered_imei_or_serial"
+  ],
+  "warning_rules": [
+    "near_warranty_expiry",
+    "low_ocr_confidence",
+    "missing_optional_document",
+    "claim_reported_close_to_reporting_deadline"
+  ],
+  "manual_review_rules": [
+    "imei_or_serial_mismatch",
+    "product_model_mismatch",
+    "missing_mandatory_document",
+    "low_model_confidence",
+    "python_gtm_model_disagreement",
+    "large_confidence_difference",
+    "duplicate_claim_indicator",
+    "contradictory_dates",
+    "uncertain_damage_cause"
+  ],
+  "authorized_repair_required": true,
+  "unauthorized_repair_invalidates": true,
+  "project_notes": "This policy follows the current AssureX mobile-device rule behavior while exposing the additional configurable fields required by the SRS.",
+  "source_basis": [
+    "AssureX project warranty-rule design",
+    "data/assurex_nigeria_policy_rules_v2.json",
+    "data/warranty_policies.json"
+  ]
+}
