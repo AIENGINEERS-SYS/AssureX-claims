@@ -1,0 +1,19 @@
+﻿section,id,claim_id,user_id,product_id,warranty_id,assigned_employee_id,assigned_reviewer_id,status,submission_date,fault_date,fault_type,fault_description,damage_type,repair_history,previous_replacement,final_decision,manual_review_required,submitted_at,closed_at,created_at,name,category,brand,model_number,serial_number,purchase_date,purchase_price,retailer,is_active,full_name,email,phone,provider,warranty_type,start_date,expiry_date,coverage_duration_months,coverage_conditions,exclusions,extended_warranty,service_center_requirements,review_id,reviewer_user_id,decision,comments,override_applied,override_reason,reviewed_at,document_id,document_type,original_filename,mime_type,file_size,ocr_status,review_status,rule_name,rule_code,rule_category,result,severity,details,policy_version,model_version_id,predicted_class,confidence_valid,confidence_invalid,confidence_manual_review,top_confidence,evaluation_id,recommendation,explanation,policy_code,repair_date,service_center_name,authorized_service_center,parts_replaced,repair_outcome,repair_cost,notes,metric,value
+Claims,1,CLM-EXAMPLE-001,1,1,1,,2,approved,2026-09-20,2026-09-19,power,The example laptop no longer powers on.,,,False,likely_valid,False,,,2026-09-28T19:02:57.832971,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Products,1,,,PRD-3DF5F554A4584E82959D,,,,,,,,,,,,,,,,,Example Laptop,electronics,Example,AX-1,SYNTHETIC-001,2026-01-01,250000.0,Example Store,True,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Customers,1,,USR-38D522D732A64D4B9EE7,,,,,,,,,,,,,,,,,,,,,,,,,,,Sample Customer,sample@example.invalid,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Warranties,1,,,1,WAR-1957D63AF30F40429B23,,,,,,,,,,,,,,,,,,,,,,,,,,,,Example Warranty,standard,2026-01-01,2026-12-31,12,{},[],False,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Reviews,1,1,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,REV-1ECA3D1F49C54964A16E,2,approve,Synthetic example: warranty coverage and purchase evidence verified.,False,,2026-09-28T19:02:57.835967,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Analytics,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,total_claims,1
+Analytics,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,approved,1
+Analytics,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,total_products,1
+Analytics,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,total_customers,1
+Analytics,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,total_warranties,1
+Analytics,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,total_reviews,1
+Analytics,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,total_documents,0
+Analytics,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,total_rules,0
+Analytics,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,total_python_predictions,0
+Analytics,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,total_gtm_predictions,0
+Analytics,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,total_evaluations,0
+Analytics,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,total_repairs,0
+Analytics,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,review_approve,1

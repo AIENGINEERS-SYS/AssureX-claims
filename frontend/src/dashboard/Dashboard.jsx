@@ -4,6 +4,7 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {Bell, Box, ChevronRight, ClipboardList, FileText, LayoutDashboard, LogOut,
   Plus, Search, Shield, ShieldAlert, Users} from 'lucide-react';
 import {api, errorMessage, getSession, onExpired, setSession} from '../claims/api';
+import {GlobalSearchBar} from '../search/SearchApp';
 
 const Chart = React.lazy(() => import('./Charts'));
 const label = value => String(value ?? '').replaceAll('_', ' ').replace(/\b\w/g, char => char.toUpperCase());
@@ -76,7 +77,10 @@ function Customer({adminView = false}) {
 }
 
 function Reviewer({role}) {
-  const [page, setPage] = useState(1), [search, setSearch] = useState(''), [term, setTerm] = useState(''), [selected, setSelected] = useState(null);
+  const [searchParams] = useSearchParams();
+  const [page, setPage] = useState(1), [search, setSearch] = useState(''), [term, setTerm] = useState(''), [selected, setSelected] = useState(() => {
+    const id = Number(searchParams.get('claim_id'));return Number.isSafeInteger(id) && id > 0 ? {id} : null;
+  });
   useEffect(() => {const timer = setTimeout(() => {setPage(1);setTerm(search.trim());}, 350);return () => clearTimeout(timer);}, [search]);
   const result = query('reviewer', '/dashboard/reviewer', {page, per_page: 10, search: term});
   return <QueryState result={result}>{data => <><div className="page-head"><div><span className="eyebrow">Reviewer workspace</span>
@@ -208,13 +212,16 @@ function Shell({user, signOut, children}) {
     ...(role === 'customer' ? [{href: '/products', title: 'My products', icon: Box}, {href: '/claims', title: 'Claims', icon: ClipboardList}] : []),
     ...(role === 'reviewer' ? [{href: '#queue', title: 'Review queue', icon: ClipboardList}] : []),
     ...(role === 'admin' ? [{href: '/dashboard/reviewer', title: 'Reviewer workspace', icon: ShieldAlert}] : []),
+    {href: '/search', title: 'Advanced search', icon: Search},
+    {href: '/search?scope=review', title: 'Search review cases', icon: Search, hidden: !['reviewer', 'admin'].includes(role)},
+    {href: '/reports', title: 'Reports', icon: FileText},
     {href: '#notifications', title: 'Notifications', icon: Bell}];
   return <div className="shell"><a className="skip-link" href="#main">Skip to content</a><aside className="sidebar" aria-label="Sidebar"><Link className="brand" to={home.slice('/dashboard'.length)}><span className="brand-mark">AX</span>AssureX</Link>
-    <nav aria-label="Main navigation">{links.map(({href,title,icon: Icon}, i) => href.startsWith('/dashboard/') ?
+    <nav aria-label="Main navigation">{links.filter(item => !item.hidden).map(({href,title,icon: Icon}, i) => href.startsWith('/dashboard/') ?
       <Link key={`${href}-${i}`} to={href.slice('/dashboard'.length)} className="nav-link" aria-current={location.pathname === href.slice('/dashboard'.length) ? 'page' : undefined}><Icon size={18}/>{title}</Link> :
       <a key={`${href}-${i}`} href={href} className="nav-link"><Icon size={18}/>{title}</a>)}</nav>
     <button className="nav-link signout" onClick={signOut}><LogOut size={18}/>Sign out</button></aside>
-    <div className="workspace"><header className="topbar"><small>ASSUREX / {label(role)} WORKSPACE</small><div className="account"><a href="#notifications" aria-label="Notifications"><Bell size={18}/></a>
+    <div className="workspace"><header className="topbar"><small>ASSUREX / {label(role)} WORKSPACE</small><GlobalSearchBar/><div className="account"><a href="#notifications" aria-label="Notifications"><Bell size={18}/></a>
       <span className="avatar" aria-hidden="true">{(user.full_name || user.email).split(' ').map(p => p[0]).join('').slice(0,2).toUpperCase()}</span><span>{user.full_name}</span></div></header>
       <main id="main" className="content">{children}<section id="notifications" className="notifications"><Panel title="Notification center" caption="Updates and requests linked to your account"><NoticeList/></Panel></section></main></div></div>;
 }

@@ -11,12 +11,15 @@ def init_frontend_routes(app):
     @app.get("/products")
     @app.get("/claims")
     @app.get("/dashboard")
+    @app.get("/reports")
+    @app.get("/search")
     def frontend_section():
         return _redirect_to_frontend(request.path)
 
     @app.get("/products/<path:path>")
     @app.get("/claims/<path:path>")
     @app.get("/dashboard/<path:path>")
+    @app.get("/reports/<path:path>")
     def frontend_deep_link(path):
         del path
         return _redirect_to_frontend(request.path)

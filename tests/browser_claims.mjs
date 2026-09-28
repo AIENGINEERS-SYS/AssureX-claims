@@ -45,7 +45,9 @@ export async function runClaims({baseURL, call, click, fill, wait, has, evaluate
     await wait(`!document.querySelector('#upload-${type}').disabled`);
     await evaluate(`(async () => {
       const canvas=document.createElement('canvas'); canvas.width=8; canvas.height=8;
-      canvas.getContext('2d').fillRect(0,0,8,8);
+      const context=canvas.getContext('2d');
+      context.fillStyle = ${JSON.stringify({receipt:'#112233', product_image:'#223344', serial_number_image:'#334455', damage_evidence:'#445566'}[type])};
+      context.fillRect(0,0,8,8);
       const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
       const transfer=new DataTransfer(); transfer.items.add(new File([blob],'${type}.png',{type:'image/png'}));
       const input=document.querySelector('#upload-${type}'); input.files=transfer.files;

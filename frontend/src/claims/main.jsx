@@ -1,9 +1,10 @@
 import React, {useEffect, useState} from 'react';
 import {BrowserRouter, Link, Route, Routes, useNavigate, useParams} from 'react-router-dom';
 import {useForm} from 'react-hook-form';
-import {api, allPages, errorMessage, getSession, onExpired, setSession} from './api';
+import {api, errorMessage, getSession, onExpired, setSession} from './api';
 import {DocumentsStep, ReviewStep} from './components';
 import Wizard from './Wizard';
+import SearchWorkspace from '../search/SearchWorkspace';
 import './styles.css';
 
 function Login({signedIn, expectedUser}) {
@@ -27,21 +28,20 @@ function Login({signedIn, expectedUser}) {
 }
 
 function ClaimList() {
-  const [claims, setClaims] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  const [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const navigate = useNavigate();
-  useEffect(() => {let active = true; allPages('/claims/my').then(data => {if (active) setClaims(data);}).catch(err => {if (active) setError(errorMessage(err));}); return () => {active = false;};}, []);
   async function start() {
-    setBusy(true); setError('');
-    try {const {data} = await api.post('/claims/draft', {}); navigate(`/draft/${data.claim.id}`);}
-    catch (err) {setError(errorMessage(err)); setBusy(false);}
+    setBusy(true);setError('');
+    try {const {data} = await api.post('/claims/draft', {});navigate(`/draft/${data.claim.id}`);}
+    catch (error) {setError(errorMessage(error));setBusy(false);}
   }
-  return <><div className="title-row"><div><p className="eyebrow">HERE WHEN YOU NEED US</p><h1>My claims</h1><p>Manage your drafts and follow your submitted claims.</p></div>
-    <button className="primary" onClick={start} disabled={busy}>{busy ? 'Starting…' : 'New claim'}</button></div>
+  return <><div className="title-row"><div><p className="eyebrow">HERE WHEN YOU NEED US</p><h1>My claims</h1><p>Find a claim, resume a draft, or follow its progress.</p></div>
+    <button className="primary" onClick={start} disabled={busy}>{busy ? 'Starting...' : 'New claim'}</button></div>
     {error && <p className="error" role="alert">{error}</p>}
-    {claims === null ? <p role="status">Loading claims…</p> : !claims.length ? <div className="panel empty"><h2>No claims yet</h2><p>Start a claim when you need support with a registered product.</p></div> :
-      <div className="claim-list">{claims.map(claim => <article className="panel claim-card" key={claim.id}><div><span className={`badge ${claim.status === 'DRAFT' ? 'draft' : ''}`}>{claim.status.replaceAll('_', ' ')}</span>
-        <h2>{claim.product?.name || 'New claim'}</h2><p>{claim.claim_id || `Draft · Step ${claim.current_step} of 4`}</p><small>Last saved {new Date(claim.updated_at).toLocaleString()}</small></div>
-        <Link className="button" to={claim.status === 'DRAFT' ? `/draft/${claim.id}` : `/${claim.claim_id}`}>{claim.status === 'DRAFT' ? 'Resume draft' : 'View claim'}</Link></article>)}</div>}
+    <SearchWorkspace user={getSession().user} initialScope="claims" embedded onOpen={path => {
+      if (path.startsWith('/claims/')) navigate(path.slice('/claims'.length));
+      else {window.history.pushState(null, '', path);window.dispatchEvent(new PopStateEvent('popstate'));}
+    }}/>
   </>;
 }
 
@@ -76,7 +76,7 @@ export function App({basePath = '/claims'} = {}) {
     finally {setSession(null); setUser(null); setNeedsLogin(false);}
   }
   return <BrowserRouter basename={basePath}><a className="skip-link" href="#main">Skip to content</a><header><a className="brand" href="/products">Assure<span>X</span></a>
-    <nav aria-label="Main navigation"><a href="/products">Products</a><Link to="/" aria-current="page">Claims</Link></nav>
+    <nav aria-label="Main navigation"><a href="/products">Products</a><Link to="/" aria-current="page">Claims</Link><a href="/reports">Reports</a><a href="/search">Search</a></nav>
     {user && <div className="account"><span>{user.full_name}</span><button onClick={signOut}>Sign out</button></div>}</header>
     {needsLogin && user && <div className="reauth" role="dialog" aria-modal="true" aria-label="Sign in again"><Login expectedUser={user} signedIn={() => setNeedsLogin(false)}/></div>}
     <main id="main" inert={needsLogin && user ? true : undefined}>{user ? <Routes><Route path="/" element={<ClaimList/>}/><Route path="/draft/:id" element={<Wizard/>}/>

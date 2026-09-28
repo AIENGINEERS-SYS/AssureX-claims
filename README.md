@@ -14,9 +14,12 @@ AssureX is a warranty and insurance claims application. Customers can register p
 | Google Teachable Machine prediction generation | Implemented |
 | Warranty-rule, contradiction, and decision generation | Implemented |
 | Private Claim Summary Card generation | Implemented |
-| PDF or CSV claim-report export | Not implemented |
+| PDF, CSV and Excel reports with background exports and access-controlled history | Implemented |
+| Advanced search, combined filters, saved searches and search analytics | Implemented |
 
 Model operation and deployment details are documented in `documentation/model-evaluation.md`.
+
+Use `/search` for scoped global search and advanced filters, or search directly from My claims. See [search setup, API and indexing](documentation/search.md) for migration, PostgreSQL trigram indexing and telemetry-retention commands.
 
 ## Install the application
 
@@ -299,7 +302,16 @@ When more evidence is requested, open the claim from the notification or claim l
 
 ## Export a claim report
 
-Claim-report export is **not currently implemented**. There is no PDF or CSV export control and no access-controlled report endpoint. The JSON claim and dashboard APIs are operational data interfaces, not formatted claim reports.
+Open `/reports`, choose a report type and filters, then preview or request a PDF, CSV or Excel export. Completed files appear in your private report history. Customers, employees, reviewers and administrators receive reports limited to their current ownership or assignments.
+
+Apply the database migrations and run a dedicated worker alongside the API:
+
+```powershell
+python -m flask --app backend:create_app db upgrade
+python -m flask --app backend:create_app report-worker
+```
+
+Web and worker processes must share `REPORT_STORAGE_PATH`. See [reporting architecture, API examples and deployment settings](documentation/reports.md). Synthetic [PDF](documentation/examples/reports/sample-customer-report.pdf), [CSV](documentation/examples/reports/sample-customer-report.csv) and [Excel](documentation/examples/reports/sample-customer-report.xlsx) examples are included.
 
 ## Run automated tests
 

@@ -129,3 +129,11 @@ Reviewer notes, risk lookup, approval and rejection require both status `manual_
 | 500 / 503 | Internal failure or database service unavailable; no credentials or SQL details returned |
 
 See [setup, security design and deployment](authentication.md) for environment variables, migrations, account bootstrap, token lifecycle and operational requirements.
+
+# Reporting and exports
+
+See [Reports API, architecture and deployment](reports.md) for authenticated report previews, CSV/Excel/PDF export jobs, progress, private history and downloads.
+
+# Advanced search
+
+See [Search API, filter semantics and deployment](search.md) for `/api/search`, `/api/claims/search`, `/api/products/search`, `/api/warranties/search`, `/api/review/search`, saved searches, suggestions and admin analytics.

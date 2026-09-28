@@ -56,7 +56,12 @@ def browser_server(app,accounts,tmp_path,monkeypatch):
             pytest.fail("Vite did not become ready within 30 seconds")
         yield frontend_url,browser,str(tmp_path/"browser-profile")
     finally:
-        frontend.terminate()
+        if os.name == 'nt' and frontend.poll() is None:
+            # npm.cmd starts a separate Node process; terminate only this test's tree.
+            subprocess.run(['taskkill', '/PID', str(frontend.pid), '/T', '/F'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        else:
+            frontend.terminate()
         try: frontend.wait(timeout=5)
         except subprocess.TimeoutExpired: frontend.kill()
         api_server.shutdown(); api_thread.join(timeout=5); api_server.server_close()
