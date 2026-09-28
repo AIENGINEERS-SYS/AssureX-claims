@@ -2,11 +2,11 @@ from flask import Blueprint
 from flask_jwt_extended import current_user
 from sqlalchemy import select
 from werkzeug.exceptions import Conflict, NotFound
-from backend.db.models import Claim, Review, RuleResult
+from backend.db.models import AuditLog, Claim, Review, RuleResult
 from backend.extensions import db
 from backend.security import role_required
 from .common import audit, page
-from .schemas import ReviewSchema, body, claim_json
+from .schemas import OverrideSchema, ReviewSchema, body, claim_json
 from backend.services.dashboard_notifications import notify
 
 bp = Blueprint("review", __name__, url_prefix="/api/review")
@@ -44,20 +44,29 @@ def risk(claim_id):
                               ("rule_code", "rule_category", "result", "severity", "details", "policy_version")})
 
 
-def record(claim_id, decision):
-    data = body(ReviewSchema())
+def record(claim_id, decision, data=None, *, explicit_override=False):
+    data = data or body(ReviewSchema())
     claim = reviewable(claim_id)
     previous = claim.final_decision
+    human_decision = "likely_valid" if decision == "approve" else "likely_invalid" if decision == "reject" else None
+    differs = bool(human_decision and previous and human_decision != previous)
+    if differs and not explicit_override:
+        raise Conflict("This action differs from the automated recommendation. Use the override action and provide a reason.")
     if decision in {"approve", "reject"}:
         claim.status = "approved" if decision == "approve" else "rejected"
-        claim.final_decision = "likely_valid" if decision == "approve" else "likely_invalid"
+        claim.final_decision = human_decision
         claim.manual_review_required = False
     db.session.add(Review(claim_id=claim.id, reviewer_user_id=current_user.id,
-                           decision=decision, comments=data["notes"], previous_decision=previous))
+                           decision=decision, comments=data["notes"], previous_decision=previous,
+                           override_applied=explicit_override,
+                           override_reason=data.get("override_reason") if explicit_override else None))
     if decision in {"approve", "reject"}:
         notify(claim.user_id, "claim_update", "Claim decision available",
             f"Claim {claim.claim_id} was {claim.status}.", claim_id=claim.id)
-    audit("review." + decision, claim, new={"status": claim.status}, claim_id=claim.id)
+    audit("review.override" if explicit_override else "review." + decision, claim,
+          old={"automated_recommendation": previous},
+          new={"status": claim.status, "human_decision": human_decision,
+               "override_reason": data.get("override_reason") if explicit_override else None}, claim_id=claim.id)
     db.session.commit()
     return {"claim": claim_json(claim)}
 
@@ -78,3 +87,29 @@ def reject(claim_id):
 @role_required("reviewer")
 def notes(claim_id):
     return record(claim_id, "manual_review_continue")
+
+
+@bp.post("/<int:claim_id>/override")
+@role_required("reviewer")
+def override(claim_id):
+    data = body(OverrideSchema())
+    return record(claim_id, data["decision"], data, explicit_override=True)
+
+
+@bp.get("/<int:claim_id>/audit-history")
+@role_required("reviewer")
+def history(claim_id):
+    claim = db.session.scalar(select(Claim).where(Claim.id == claim_id))
+    if claim is None or (current_user.role != "admin" and claim.assigned_reviewer_id not in (None, current_user.id)):
+        raise NotFound("Claim not found.")
+    reviews = db.session.scalars(select(Review).where(Review.claim_id == claim.id)
+        .order_by(Review.reviewed_at.desc(), Review.id.desc())).all()
+    audits = db.session.scalars(select(AuditLog).where(AuditLog.claim_id == claim.id)
+        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(200)).all()
+    return {"reviews": [{"review_id": item.review_id, "decision": item.decision,
+        "comments": item.comments, "override_applied": item.override_applied,
+        "override_reason": item.override_reason, "previous_decision": item.previous_decision,
+        "reviewer_user_id": item.reviewer_user_id, "reviewed_at": item.reviewed_at.isoformat()}
+        for item in reviews], "audit": [{"audit_id": item.audit_id, "action": item.action,
+        "entity_type": item.entity_type, "old_values": item.old_values, "new_values": item.new_values,
+        "user_id": item.user_id, "created_at": item.created_at.isoformat()} for item in audits]}

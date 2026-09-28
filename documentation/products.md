@@ -1,6 +1,6 @@
 # Phase 4: Products and warranties
 
-Customers can now register a product and its original warranty in one transaction, browse/search/filter their products, edit details, and add or manage warranty periods. Open `/products` in the Flask application. Administrators can manage all products; employees and reviewers cannot use the product-management APIs. Existing claim access remains unchanged.
+Customers can register a product and its original warranty in one transaction, browse/search/filter their products, edit details, and add or manage warranty periods. Open `/products` in the React application; the API host redirects that browser route to `FRONTEND_URL`. Administrators can manage all products; employees and reviewers cannot use the product-management APIs. Existing claim access remains unchanged.
 
 ## Run the feature
 
@@ -8,13 +8,15 @@ Use the Phase 3 [setup instructions](authentication.md) to configure a private `
 
 ```powershell
 .\.venv\Scripts\python.exe -m flask --app backend:create_app db upgrade
-.\.venv\Scripts\python.exe -m flask --app backend:create_app run
-# Open http://127.0.0.1:5000/products
+.\.venv\Scripts\waitress-serve.exe --listen=127.0.0.1:8000 --call backend:create_app
+cd frontend
+npm run dev
+# Open http://127.0.0.1:5173/products
 ```
 
 Sign in with an existing customer/admin account, or choose **Create an account** in the sign-in dialog. The frontend uses the existing authentication endpoints. JWTs remain in page memory, refresh is serialized, and no tokens are written to browser storage. Reloading the page requires signing in again. Normal navigation stays within the application; expired-session reauthentication preserves unsaved forms. Logout revokes the session through the API.
 
-There is no frontend framework or build step: Flask serves the template and local CSS/JavaScript from `frontend/`. Browser code renders untrusted values as escaped text, uses a same-origin content security policy, and never embeds user data in scripts. Forms retain values after validation/network failures. Dialogs, visible text status badges, native controls, focus indicators, live notifications and a skip link support keyboard/screen-reader use. The list includes loading, empty, error and retry states and works on narrow screens through a horizontally scrollable table.
+The product interface is part of the standalone React/Vite application. It calls the Flask API through `VITE_API_URL`; Flask redirects known browser routes but does not render pages or serve frontend assets. React escapes untrusted values, forms retain values after validation/network failures, and the responsive list includes loading, empty, error and retry states.
 
 ## Files and architecture
 
@@ -27,10 +29,10 @@ There is no frontend framework or build step: Flask serves the template and loca
 | `backend/db/product_identity.py` | Unicode-normalized brand/model/serial identity |
 | `backend/db/models.py` | Existing Product and Warranty entities with two new fields |
 | `backend/db/migrations/versions/c731ef4209ab_product_warranty_management.py` | Serial uniqueness and warranty duration-unit migration |
-| `backend/web.py` | Same-origin frontend routes and assets |
-| `frontend/templates/products.html` | Application shell and authentication/dialog markup |
-| `frontend/static/products.js` | Real API workflows, forms, previews, dashboard and details |
-| `frontend/static/products.css` | Responsive styles and accessible status treatments |
+| `backend/middleware.py` | Strict configured-origin CORS and API security headers |
+| `frontend/src/products/ProductsApp.jsx` | React product, warranty and authentication workflows |
+| `frontend/src/products/products.css` | Product feature style entrypoint |
+| `frontend/static/products.css` | Existing responsive visual system imported by React |
 | `tests/test_products.py` | Calculation, validation, ownership and API integration tests |
 | `tests/test_product_migrations.py` | Populated-database migration and duplicate preflight checks |
 | `tests/test_product_browser.py` | Opt-in real-browser workflow, mobile layout and script-injection checks |

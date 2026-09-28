@@ -28,18 +28,24 @@ def create_app(config=None):
 
     from .security import init_jwt_callbacks
     from .middleware import init_middleware
+    from .frontend import init_frontend_routes
     from .cli import init_cli
-    from .api import auth, admin, claims, review, products, claim_workflow, documents, dashboard
-    from .web import bp as web_bp
+    from .api import auth, admin, claims, review, products, claim_workflow, documents, dashboard, predictions
     init_jwt_callbacks()
     init_middleware(app)
+    init_frontend_routes(app)
     init_cli(app)
     @app.cli.command("dashboard-reminders")
     def dashboard_reminders():
         """Create idempotent warranty expiry notifications."""
         from .services.dashboard_notifications import create_warranty_reminders
         print(f"Created {create_warranty_reminders()} warranty reminders.")
+
+    @app.get("/api/health")
+    def health():
+        return {"status": "ok"}
+
     for blueprint in (auth.bp, admin.bp, claims.bp, review.bp, products.bp, claim_workflow.bp, documents.bp,
-                      dashboard.bp, web_bp):
+                      dashboard.bp, predictions.bp):
         app.register_blueprint(blueprint)
     return app

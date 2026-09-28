@@ -1,10 +1,11 @@
 """JWT-protected dashboard endpoints and reviewer workflow actions."""
+import re
 from datetime import timedelta
 from flask import Blueprint, current_app, request
 from flask_jwt_extended import current_user
 from sqlalchemy import func, select
 from werkzeug.exceptions import BadRequest, NotFound
-from backend.db.models import Claim, Document, DuplicateInvestigation, Notification, Review, User, utcnow
+from backend.db.models import Claim, Document, DuplicateInvestigation, Notification, Review, RuleResult, User, utcnow
 from backend.extensions import db, limiter
 from backend.security import role_required
 from backend.services.dashboard import (WINDOWS, admin_dashboard, customer_dashboard, duplicate_pairs,
@@ -14,6 +15,7 @@ from .claim_schemas import DOCUMENT_TYPES
 from .common import audit
 
 bp = Blueprint("dashboard", __name__, url_prefix="/api/dashboard")
+SHA256_HEX = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 @bp.after_request
@@ -142,15 +144,37 @@ def visible_claim(claim_id, lock=False, include_info=False):
 @role_required("reviewer")
 def review_details(claim_id):
     claim = visible_claim(claim_id, include_info=True)
-    documents = db.session.execute(select(Document.id, Document.document_type, Document.ocr_status,
-        Document.review_status).where(Document.claim_id == claim.id)).all()
+    documents = db.session.scalars(select(Document).where(Document.claim_id == claim.id)).all()
+    from backend.services.evaluation import evaluation_json, latest_evaluation, policy_for_claim
+    evaluation = latest_evaluation(claim.id)
+    policy, policy_warning = policy_for_claim(claim) if claim.product else (None, "Claim has no product.")
+    rules = db.session.scalars(select(RuleResult).where(RuleResult.claim_id == claim.id)
+        .order_by(RuleResult.created_at.desc(), RuleResult.id.desc())).all()
+    seen, latest_rules = set(), []
+    for rule in rules:
+        if rule.rule_code not in seen:
+            seen.add(rule.rule_code)
+            latest_rules.append({"rule_code": rule.rule_code, "rule_category": rule.rule_category,
+                "result": rule.result, "severity": rule.severity, "details": rule.details,
+                "policy_version": rule.policy_version})
+    reviews = db.session.scalars(select(Review).where(Review.claim_id == claim.id)
+        .order_by(Review.reviewed_at.desc(), Review.id.desc())).all()
     return {"claim": {"id": claim.id, "claim_id": claim.claim_id, "status": claim.status,
         "customer": claim.user.full_name, "product": claim.product.name if claim.product else None,
         "description": claim.fault_description, "fault_type": claim.fault_type,
         "submitted_at": claim.submitted_at.isoformat() if claim.submitted_at else None,
         "assigned_reviewer_id": claim.assigned_reviewer_id,
+        "automated_recommendation": evaluation.recommendation if evaluation else None,
         "documents": [{"id": r.id, "type": r.document_type, "ocr_status": r.ocr_status,
-            "review_status": r.review_status} for r in documents]}}
+            "review_status": r.review_status, "extracted_data": r.verified_data or r.extracted_data}
+            for r in documents]},
+        "evaluation": evaluation_json(evaluation) if evaluation else None,
+        "policy": policy.as_dict() if policy else None, "policy_warning": policy_warning,
+        "rules": latest_rules,
+        "review_history": [{"review_id": r.review_id, "decision": r.decision, "comments": r.comments,
+            "override_applied": r.override_applied, "override_reason": r.override_reason,
+            "reviewer_user_id": r.reviewer_user_id, "reviewed_at": r.reviewed_at.isoformat()}
+            for r in reviews]}
 
 
 @bp.patch("/reviewer/claims/<int:claim_id>/assignment")
@@ -225,9 +249,10 @@ def decide_duplicate():
     left, right, digest, status = (data.get(k) for k in
         ("claim_id", "matching_claim_id", "file_hash", "status"))
     if (type(left) is not int or type(right) is not int or left == right or
-            not isinstance(digest, str) or len(digest) != 64 or
+            not isinstance(digest, str) or not SHA256_HEX.fullmatch(digest) or
             status not in {"confirmed", "false_positive"}):
         raise BadRequest("Provide two claim IDs, an exact file hash and a valid decision.")
+    digest = digest.lower()
     first, second = sorted((left, right))
     if current_user.role != "admin" and not db.session.scalar(select(Claim.id).where(
             Claim.id.in_((first, second)), review_scope(current_user.id)).limit(1)):

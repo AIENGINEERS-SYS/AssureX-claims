@@ -28,7 +28,10 @@ def test_access_control(client, accounts, claims):
     assert get(client, f"/api/dashboard/customer?user_id={accounts['customer']}", "admin").status_code == 200
     assert get(client, "/api/dashboard/customer?user_id=99999", "admin").status_code == 400
     assert get(client, "/api/dashboard/customer?user_id=99999").json["claims"]["total"] == 1
-    assert client.get("/dashboard/customer").status_code == 200
+    page = client.get("/dashboard/customer?tab=claims")
+    assert page.status_code == 307
+    assert page.headers["Location"] == "http://localhost:5173/dashboard/customer?tab=claims"
+    assert client.get("/not-found").status_code == 404
 
 
 def test_customer_warranties_trends_and_actions(client, app, accounts, claims):
@@ -145,6 +148,8 @@ def test_admin_analytics_disagreement_and_duplicates(client, app, accounts, clai
     assert queue.json["queue"][0]["risk_score"] == 75
     assert queue.json["disagreements"][0]["claim_id"]
     duplicate = queue.json["duplicates"][0]
+    assert client.post("/api/dashboard/reviewer/duplicates/decision", headers=reviewer,
+        json={**duplicate, "file_hash": "z" * 64, "status": "confirmed"}).status_code == 400
     assert client.post("/api/dashboard/reviewer/duplicates/decision", headers=auth(client), json={
         **duplicate, "status": "confirmed"}).status_code == 403
     decided = client.post("/api/dashboard/reviewer/duplicates/decision", headers=reviewer,

@@ -159,6 +159,7 @@ class Claim(Timestamps, Base):
     python_predictions: Mapped[list["PythonPrediction"]] = relationship(back_populates="claim", passive_deletes="all")
     gtm_predictions: Mapped[list["GTMPrediction"]] = relationship(back_populates="claim", passive_deletes="all")
     rule_results: Mapped[list["RuleResult"]] = relationship(back_populates="claim", passive_deletes="all")
+    evaluations: Mapped[list["EvaluationResult"]] = relationship(back_populates="claim", passive_deletes="all")
     reviews: Mapped[list["Review"]] = relationship(back_populates="claim", passive_deletes="all")
 
 
@@ -314,6 +315,38 @@ class RuleResult(Base):
     claim: Mapped[Claim] = relationship(back_populates="rule_results")
 
 
+class EvaluationResult(Base):
+    """Immutable snapshot of one complete automated claim evaluation."""
+    __tablename__ = "evaluation_results"
+    __table_args__ = (
+        CheckConstraint(
+            "recommendation IN ('likely_valid','likely_invalid','manual_review_required')",
+            name="ck_evaluations_recommendation",
+        ),
+        CheckConstraint("status IN ('complete','partial','failed')", name="ck_evaluations_status"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    evaluation_id: Mapped[str] = mapped_column(String(32), default=pid("EVL"), unique=True, nullable=False)
+    claim_id: Mapped[int] = mapped_column(ForeignKey("claims.id", ondelete="RESTRICT"), index=True)
+    python_prediction_id: Mapped[int | None] = mapped_column(
+        ForeignKey("python_predictions.id", ondelete="RESTRICT"), index=True)
+    gtm_prediction_id: Mapped[int | None] = mapped_column(
+        ForeignKey("gtm_predictions.id", ondelete="RESTRICT"), index=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    recommendation: Mapped[str] = mapped_column(String(32), nullable=False)
+    comparison: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    duplicate_finding: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    contradictions: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    explanation: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    model_errors: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    policy_code: Mapped[str | None] = mapped_column(String(100))
+    policy_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    claim: Mapped[Claim] = relationship(back_populates="evaluations")
+    python_prediction: Mapped[PythonPrediction | None] = relationship()
+    gtm_prediction: Mapped[GTMPrediction | None] = relationship()
+
+
 class Review(Base):
     __tablename__ = "reviews"
     __table_args__ = (CheckConstraint("decision IN ('approve','reject','request_information','manual_review_continue')", name="ck_reviews_decision"),)
@@ -324,6 +357,7 @@ class Review(Base):
     decision: Mapped[str] = mapped_column(String(32), nullable=False)
     comments: Mapped[str | None] = mapped_column(Text)
     override_applied: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    override_reason: Mapped[str | None] = mapped_column(Text)
     previous_decision: Mapped[str | None] = mapped_column(String(32))
     reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
@@ -353,6 +387,7 @@ Index("ix_notifications_user_created", Notification.user_id, Notification.create
 Index("ix_claims_user_updated", Claim.user_id, Claim.updated_at)
 Index("ix_claims_review_queue", Claim.status, Claim.assigned_reviewer_id, Claim.submitted_at)
 Index("ix_reviews_reviewer_date", Review.reviewer_user_id, Review.reviewed_at)
+Index("ix_evaluation_claim_created", EvaluationResult.claim_id, EvaluationResult.created_at)
 
 
 class DuplicateInvestigation(Base):

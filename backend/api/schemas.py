@@ -81,6 +81,15 @@ class ReviewSchema(StrictSchema):
     notes = fields.String(required=True, validate=[validate.Length(min=1, max=10000), nonblank])
 
 
+class ClaimIdSchema(StrictSchema):
+    claim_id = fields.Integer(required=True, strict=True, validate=validate.Range(min=1))
+
+
+class OverrideSchema(ReviewSchema):
+    decision = fields.String(required=True, validate=validate.OneOf(("approve", "reject")))
+    override_reason = fields.String(required=True, validate=[validate.Length(min=3, max=10000), nonblank])
+
+
 class PaginationSchema(Schema):
     page = fields.Integer(load_default=1, validate=validate.Range(min=1, max=100000))
     per_page = fields.Integer(load_default=20, validate=validate.Range(min=1, max=100))

@@ -2,8 +2,11 @@
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 from threading import Thread
+import time
+from urllib.request import urlopen
 import pytest
 from werkzeug.serving import make_server
 from test_auth import app, accounts, PASSWORD
@@ -15,9 +18,7 @@ pytestmark = pytest.mark.skipif(os.getenv("ASSUREX_BROWSER_TESTS") != "1", reaso
 def browser_server(app,accounts,tmp_path,monkeypatch):
     from datetime import date
     from backend.services import warranty_calculations
-    import backend.web
     monkeypatch.setattr(warranty_calculations,"current_date",lambda:date(2026,9,26))
-    monkeypatch.setattr(backend.web,"current_date",lambda:date(2026,9,26))
     browser = os.getenv("ASSUREX_BROWSER_PATH")
     if not browser:
         candidates = [shutil.which("google-chrome"),shutil.which("chromium"),shutil.which("msedge"),
@@ -26,12 +27,39 @@ def browser_server(app,accounts,tmp_path,monkeypatch):
         browser = next((item for item in candidates if item and Path(item).is_file()),None)
     if not browser or not shutil.which("node"):
         pytest.fail("Browser tests need Node 22+ and Chrome/Edge; set ASSUREX_BROWSER_PATH if necessary")
-    server = make_server("127.0.0.1",0,app,threaded=True)
-    thread = Thread(target=server.serve_forever,daemon=True); thread.start()
+    api_server = make_server("127.0.0.1",0,app,threaded=True)
+    api_thread = Thread(target=api_server.serve_forever,daemon=True); api_thread.start()
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1",0))
+        frontend_port = listener.getsockname()[1]
+    frontend_url = f"http://127.0.0.1:{frontend_port}"
+    app.config["FRONTEND_ORIGINS"] = (frontend_url,)
+    npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
+    if not npm:
+        pytest.fail("Browser tests need npm and installed frontend dependencies")
+    frontend = subprocess.Popen([npm,"run","dev","--","--host","127.0.0.1","--port",str(frontend_port),"--strictPort"],
+        cwd=Path(__file__).resolve().parents[1]/"frontend", env=os.environ | {
+            "VITE_API_URL":f"http://127.0.0.1:{api_server.server_port}/api"},
+        stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
     try:
-        yield f"http://127.0.0.1:{server.server_port}",browser,str(tmp_path/"browser-profile")
+        deadline = time.time()+30
+        while time.time()<deadline:
+            if frontend.poll() is not None:
+                pytest.fail("Vite failed to start:\n"+(frontend.stdout.read() if frontend.stdout else ""))
+            try:
+                with urlopen(frontend_url,timeout=1) as response:
+                    if response.status == 200:
+                        break
+            except OSError:
+                time.sleep(.1)
+        else:
+            pytest.fail("Vite did not become ready within 30 seconds")
+        yield frontend_url,browser,str(tmp_path/"browser-profile")
     finally:
-        server.shutdown(); thread.join(timeout=5); server.server_close()
+        frontend.terminate()
+        try: frontend.wait(timeout=5)
+        except subprocess.TimeoutExpired: frontend.kill()
+        api_server.shutdown(); api_thread.join(timeout=5); api_server.server_close()
 
 
 def run_browser(browser_server,scenario):

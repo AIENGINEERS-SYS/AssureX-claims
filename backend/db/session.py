@@ -10,7 +10,10 @@ from sqlalchemy.orm import Session, sessionmaker
 def database_url() -> str:
     url = os.getenv("DATABASE_URL")
     if url:
-        return url.replace("postgres://", "postgresql+psycopg://", 1) if url.startswith("postgres://") else url
+        for prefix in ("postgres://", "postgresql://"):
+            if url.startswith(prefix):
+                return url.replace(prefix, "postgresql+psycopg://", 1)
+        return url
     if any(os.getenv(k) for k in ("DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD")):
         from sqlalchemy.engine import URL
         return URL.create(

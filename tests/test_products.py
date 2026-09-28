@@ -154,6 +154,7 @@ def test_search_filters_sort_pagination_and_status_parity(client,app,headers):
     assert response.status_code == 200,response.json
     assert response.json["items"][0]["name"] == "Alpha phone" and response.json["total"] == 2
     assert response.json["summary"]["by_status"]["Near Expiry"] == 1
+    assert client.get("/api/products?q=&category=&warranty_status=&sort=newest&page=1",headers=headers).status_code == 200
     assert client.get("/api/products?q=phone",headers=headers).json["total"] == 1
     assert client.get("/api/products?q=%25",headers=headers).json["total"] == 0
     assert client.get("/api/products?category=Phones",headers=headers).json["items"][0]["category"] == "Phones"
@@ -260,14 +261,29 @@ def test_preview_and_config_threshold(client,app,headers):
     assert client.get("/api/products?warranty_status=Near%20Expiry",headers=headers).json["total"] == 1
 
 
-def test_ui_shell_and_csp(client):
-    for path in ("/products","/products/new","/products/1","/products/1/edit"):
+def test_api_health_cors_and_frontend_route_handoff(client):
+    health = client.get("/api/health")
+    assert health.status_code == 200 and health.json == {"status": "ok"}
+
+    allowed = client.options("/api/products", headers={
+        "Origin": "http://localhost:5173",
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "Authorization",
+    })
+    assert allowed.status_code == 200
+    assert allowed.headers["Access-Control-Allow-Origin"] == "http://localhost:5173"
+    assert "Authorization" in allowed.headers["Access-Control-Allow-Headers"]
+
+    denied = client.options("/api/products", headers={
+        "Origin": "https://untrusted.example",
+        "Access-Control-Request-Method": "GET",
+    })
+    assert denied.status_code == 403
+    assert "Access-Control-Allow-Origin" not in denied.headers
+    for path in ("/products", "/claims/draft/42", "/dashboard/admin"):
         response = client.get(path)
-        assert response.status_code == 200
-        assert b"Products &amp; warranties" in response.data or b"Products & warranties" in response.data
-        assert "script-src 'self'" in response.headers["Content-Security-Policy"]
-    assert "script-src" not in client.get("/api/products").headers["Content-Security-Policy"]
-    assert client.get("/assets/products.js").status_code == 200
+        assert response.status_code == 307
+        assert response.headers["Location"] == f"http://localhost:5173{path}"
 
 
 def test_legacy_coverage_survives_warranty_edit(client,app,headers):

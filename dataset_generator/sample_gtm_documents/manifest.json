@@ -1,0 +1,12 @@
+{
+  "source": "C:\\Users\\ADMIN\\Videos\\AssureX-claims\\dataset_generator\\sample_claims.csv",
+  "rows": 5,
+  "images": 5,
+  "label_column": "prediction_class",
+  "labels": {
+    "valid": 2,
+    "invalid": 2,
+    "manual_review": 1
+  },
+  "schema_version": 1
+}

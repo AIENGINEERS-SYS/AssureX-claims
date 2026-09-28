@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build && vite build --config vite.dashboard.config.js",
-    "watch": "vite build --watch"
+    "dev": "vite",
+    "build": "vite build",
+    "start": "serve -s dist -l $PORT",
+    "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -17,6 +19,7 @@
     "react-hook-form": "^7.62.0",
     "react-router-dom": "^7.9.1",
     "recharts": "^3.10.1",
+    "serve": "^14.2.4",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
