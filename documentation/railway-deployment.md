@@ -5,7 +5,7 @@ AssureX deploys as two independent Railway services from this repository. The br
 ## API service
 
 - Service name: `API`
-- Root directory: `/`
+- Root directory: repository root (leave Railway's **Root Directory** setting empty; do not set it to `backend`)
 - Railway config path: `/railway.json`
 - Railpack config: `/railpack.json`
 - Public healthcheck: `/api/health`

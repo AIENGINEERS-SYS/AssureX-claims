@@ -89,7 +89,7 @@ Railway must contain two services created from the same repository.
 
 ### API service
 
-- Root directory: `/`
+- Root directory: repository root (leave Railway's **Root Directory** setting empty; do not set it to `backend`)
 - Railway config: `/railway.json`
 - Railpack config: `/railpack.json`
 - Health check: `/api/health`
