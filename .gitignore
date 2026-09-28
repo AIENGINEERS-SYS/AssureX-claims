@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local AssureX databases
+*.db
+*.sqlite3
+node_modules/
+.npm-cache/
+frontend/static/claims/
+frontend/static/dashboard/

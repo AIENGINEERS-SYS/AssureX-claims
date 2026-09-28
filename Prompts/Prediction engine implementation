@@ -1,0 +1,1431 @@
+You are a senior AI engineer, machine learning engineer, backend architect, full-stack software engineer, and production systems reviewer working on the existing AssureX Claims Management System repository.
+
+Your task is to inspect the current repository and implement Phases 14 through 21 robustly, production-readily, and end to end.
+
+Do not blindly create duplicate architecture.
+
+Before implementing anything:
+
+1. Inspect the existing backend, frontend, models, database schema, API structure, authentication, RBAC, claim workflow, document-processing pipeline, dashboard implementation, Python ML model, GTM model, and existing tests.
+2. Identify functionality that already exists.
+3. Reuse and extend existing services, repositories, models, schemas, routes, utilities, and UI components where appropriate.
+4. Detect architectural conflicts, duplicate implementations, dead code, incomplete integrations, and inconsistent naming.
+5. Preserve backward compatibility unless an existing implementation is clearly broken.
+6. Do not replace working functionality merely to satisfy the wording of this prompt.
+7. Make migrations safely where database changes are required.
+8. After implementation, perform an end-to-end audit and fix any discovered integration bugs.
+
+The implementation must follow the repository’s current technology stack and coding conventions.
+
+Assume the primary stack includes:
+
+* Python
+* Flask
+* Flask-SQLAlchemy
+* Flask-JWT-Extended
+* PostgreSQL
+* React
+* TypeScript
+* React Query
+* Axios
+* Tailwind CSS
+* Existing Python ML model
+* Existing GTM model
+
+All protected endpoints must respect the project’s existing JWT authentication and RBAC architecture.
+
+⸻
+
+PHASE 14 — PREDICTION APIs
+
+Implement two independent prediction services.
+
+Required endpoints:
+
+POST /predict/python
+
+POST /predict/gtm
+
+The exact API prefix may follow the repository’s existing route conventions, for example:
+
+POST /api/predict/python
+
+POST /api/predict/gtm
+
+Do not introduce inconsistent routing if the application already uses /api.
+
+Requirement
+
+The Python model and GTM model must operate independently.
+
+A failure in one model must not automatically prevent the other model from producing a result.
+
+Create separate prediction services such as:
+
+* PythonPredictionService
+* GTMPredictionService
+
+Do not place both model implementations inside one giant route handler.
+
+Each service should:
+
+* load or access its own model
+* validate model inputs
+* normalize inputs consistently
+* generate class probabilities/confidence values
+* determine the top prediction
+* return standardized output
+* report model/version metadata where available
+* handle model errors gracefully
+* log inference failures without exposing sensitive internal details
+
+Standardize class names across models.
+
+Prefer canonical internal labels such as:
+
+* valid
+* invalid
+* manual_review
+
+Example API response:
+
+{
+“prediction”: “Manual Review”,
+“prediction_class”: “manual_review”,
+“confidence”: {
+“valid”: 0.18,
+“invalid”: 0.24,
+“manual_review”: 0.58
+},
+“top_confidence”: 0.58,
+“model”: “python”,
+“model_version”: “…”
+}
+
+Validate that confidence scores are within valid probability bounds.
+
+Where appropriate, verify that confidence totals are approximately 1.0.
+
+Do not fabricate confidence values if the underlying model does not provide probabilities. Implement an explicit adapter/calibration strategy or clearly represent unsupported confidence values.
+
+⸻
+
+PHASE 15 — MODEL COMPARISON ENGINE
+
+Create a dedicated model comparison service.
+
+Example:
+
+ModelComparisonService
+
+It must compare the independently generated Python and GTM prediction results.
+
+Compare:
+
+* predicted classes
+* top-class confidence
+* confidence distributions
+* difference between top confidences
+* agreement/disagreement
+* uncertainty
+
+Formula:
+
+confidence_difference =
+abs(
+python_top_confidence
+-
+gtm_top_confidence
+)
+
+Return a structured comparison object.
+
+Example:
+
+{
+“python_prediction”: “valid”,
+“gtm_prediction”: “valid”,
+“python_top_confidence”: 0.84,
+“gtm_top_confidence”: 0.79,
+“confidence_difference”: 0.05,
+“classes_match”: true,
+“status”: “Strong Match”
+}
+
+Supported consistency statuses:
+
+* Strong Match
+* Acceptable Match
+* Weak Match
+* Model Disagreement
+* Uncertain Result
+
+Do not scatter arbitrary thresholds across the codebase.
+
+Store comparison thresholds in:
+
+* application configuration
+* database configuration
+* policy configuration
+
+or another centralized configuration mechanism.
+
+Document the threshold definitions.
+
+A sensible design may use thresholds similar to:
+
+Strong Match:
+
+* same class
+* both models sufficiently confident
+* very small confidence difference
+
+Acceptable Match:
+
+* same class
+* reasonable confidence
+* moderate confidence difference
+
+Weak Match:
+
+* same class
+* confidence is weaker or noticeably different
+
+Model Disagreement:
+
+* top predicted classes differ
+
+Uncertain Result:
+
+* one or both models have insufficient confidence
+
+The exact thresholds should be configurable.
+
+Write unit tests for boundary conditions.
+
+⸻
+
+PHASE 16 — WARRANTY RULE ENGINE
+
+Build a configurable warranty policy engine.
+
+Do not scatter warranty rules throughout controllers or Python conditionals.
+
+Warranty rules must be externally configurable using an appropriate source such as:
+
+* YAML
+* JSON
+* database configuration
+* CSV where appropriate
+
+Prefer YAML, JSON, or database-backed configuration for structured policies.
+
+Create at least three configurable warranty policies.
+
+Example policy:
+
+electronics:
+warranty_months: 24
+
+required_documents:
+- receipt
+- serial_photo
+
+exclusions:
+- water_damage
+- intentional_damage
+
+authorized_repair_required: true
+
+Create policy definitions for at least three meaningful categories, for example:
+
+* electronics
+* appliances
+* mobile_devices
+
+Adapt categories to the current AssureX domain and dataset where necessary.
+
+Create a service such as:
+
+WarrantyPolicyService
+
+Responsibilities:
+
+* load policies
+* validate policy configuration
+* retrieve policy by product/category
+* calculate warranty rules
+* expose required documents
+* expose exclusions
+* expose repair requirements
+* support future policy extensions
+
+Fail safely if a policy is invalid or unavailable.
+
+Add schema validation where practical.
+
+Do not silently treat a missing policy as a valid warranty.
+
+⸻
+
+PHASE 17 — WARRANTY AND CLAIM RULE CHECKS
+
+Implement a dedicated rules-validation layer.
+
+Example:
+
+ClaimRuleEngine
+
+Each check should produce a structured result rather than returning only True/False.
+
+Example:
+
+{
+“rule”: “warranty_expiry”,
+“passed”: true,
+“severity”: “info”,
+“message”: “Claim was submitted within the active warranty period.”,
+“evidence”: {
+“purchase_date”: “…”,
+“claim_date”: “…”,
+“warranty_expiry”: “…”
+}
+}
+
+Implement at minimum the following checks.
+
+1. Warranty Expiry
+
+Validate:
+
+claim_date <= warranty_expiry
+
+Warranty expiry should derive from:
+
+purchase date
++
+applicable warranty duration
+
+Handle malformed and missing dates safely.
+
+⸻
+
+2. Serial Number Verification
+
+Compare serial numbers obtained from all available sources:
+
+* entered claim data
+* receipt
+* warranty card
+* product image
+* repair records
+* other OCR/document extraction results already supported by the system
+
+Normalize serial values before comparison.
+
+Handle:
+
+* whitespace
+* casing
+* common formatting differences
+* missing values
+
+Do not hide conflicts.
+
+Record every source used in the comparison.
+
+⸻
+
+3. Contradiction Detection
+
+Detect contradictions including:
+
+purchase_date > claim_date
+
+repair_date < purchase_date
+
+fault_date > claim_date
+
+different serial numbers
+
+different product models
+
+Add other obvious contradictions if supported by existing schema.
+
+Contradictions must be stored and returned as structured findings.
+
+Example:
+
+{
+“type”: “serial_number_mismatch”,
+“severity”: “high”,
+“sources”: [
+“claim_form”,
+“receipt”
+],
+“values”: [
+“ABC123”,
+“ABC128”
+]
+}
+
+Avoid treating missing information as a contradiction unless the rule explicitly considers missing data invalid.
+
+⸻
+
+4. Missing Documents
+
+Check all evidence required by the applicable warranty policy.
+
+Return:
+
+* required documents
+* submitted documents
+* missing documents
+* optional documents
+
+Do not hard-code required documents separately from the warranty policies.
+
+⸻
+
+5. Unauthorized Repairs
+
+Where the warranty policy requires authorized repair:
+
+* inspect repair records
+* identify the repair center
+* check authorization status
+* flag unauthorized repairs
+
+The rule must distinguish:
+
+* authorized
+* unauthorized
+* unknown / unable to verify
+* no repair performed
+
+Do not treat “unknown” as automatically equivalent to “unauthorized.”
+
+⸻
+
+6. Excluded Damage
+
+Compare normalized claim damage/fault information against the applicable warranty exclusions.
+
+Examples:
+
+* water damage
+* intentional damage
+* misuse
+* physical impact
+
+Avoid fragile substring-only matching where the project already has structured labels or classification outputs.
+
+Return which exclusion matched and the supporting evidence.
+
+⸻
+
+PHASE 18 — DUPLICATE DETECTION
+
+Build two duplicate-detection mechanisms.
+
+A. Document Duplicate Detection
+
+For every uploaded document calculate:
+
+SHA256(file_bytes)
+
+Store hashes in the database.
+
+Do not hash filenames or temporary paths.
+
+Hash the actual file contents.
+
+Use an indexed database column for document hashes where appropriate.
+
+When a file is uploaded:
+
+1. calculate SHA256
+2. check whether the same hash already exists
+3. identify associated claims
+4. create a duplicate warning when relevant
+
+Do not automatically reject a claim solely because a document hash exists elsewhere.
+
+There may be legitimate reused documents.
+
+Return enough information for reviewer investigation.
+
+Never leak another claimant’s private data to an unauthorized customer.
+
+Reviewer/admin visibility must respect RBAC.
+
+⸻
+
+B. Claim Duplicate Detection
+
+Create a duplicate detection service.
+
+Example:
+
+DuplicateDetectionService
+
+Compare claims using signals including:
+
+* serial numbers
+* invoice numbers
+* claimant
+* product
+* product model
+* fault description
+* claim date
+* purchase date
+* document hashes
+
+Use normalized values.
+
+Do not rely on one field only.
+
+Create a configurable scoring or evidence-based system.
+
+Example:
+
+{
+“duplicate_risk”: “high”,
+“score”: 0.84,
+“signals”: [
+{
+“field”: “serial_number”,
+“match”: true
+},
+{
+“field”: “invoice_number”,
+“match”: true
+},
+{
+“field”: “document_hash”,
+“match”: true
+}
+],
+“related_claim_ids”: […]
+}
+
+If using fuzzy matching for descriptions, isolate it behind a service and make the threshold configurable.
+
+Optimize database queries.
+
+Do not scan the entire claims table in Python for every prediction request if equivalent filtering can be performed in PostgreSQL.
+
+⸻
+
+PHASE 19 — FINAL DECISION ENGINE
+
+Create a dedicated final decision service.
+
+Example:
+
+DecisionEngine
+
+The final decision must combine:
+
+Python prediction
+
+GTM prediction
+
+model comparison
+
+warranty rules
+
+missing documents
+
+contradictions
+
+duplicate indicators
+
+Final supported outputs:
+
+* Likely Valid
+* Likely Invalid
+* Manual Review Required
+
+Do not reduce the system to one hidden weighted score without explanation.
+
+The decision must remain transparent and auditable.
+
+Design explicit decision rules.
+
+Examples of factors that could force Manual Review Required:
+
+* Python/GTM class disagreement
+* low confidence from both models
+* high-severity contradiction
+* serial mismatch
+* duplicate claim warning
+* unknown repair authorization
+* mandatory documents missing
+* conflicting extracted evidence
+
+Examples that may strongly support Likely Invalid:
+
+* warranty expired
+* confirmed excluded damage
+* confirmed unauthorized repair where policy explicitly invalidates coverage
+* strong duplicate/fraud evidence
+* mutually consistent models predicting invalid with high confidence
+
+Examples that may support Likely Valid:
+
+* active warranty
+* mandatory evidence available
+* no material contradictions
+* no meaningful duplicate indicators
+* covered fault
+* models agree with adequate confidence
+
+However:
+
+Do not allow ML predictions alone to override deterministic policy violations where business rules specify otherwise.
+
+Similarly, do not automatically reject ambiguous cases when evidence is incomplete.
+
+Ambiguous cases should be routed to human review.
+
+Store the complete decision context.
+
+Never discard:
+
+* original Python output
+* original GTM output
+* model comparison
+* individual rule checks
+* contradictions
+* duplicate signals
+
+⸻
+
+PHASE 20 — DECISION EXPLANATIONS
+
+Build an explanation-generation layer.
+
+Do not rely on opaque natural-language generation as the sole source of explanation.
+
+Explanations should be generated from structured decision evidence.
+
+Example:
+
+Decision: Manual Review Required
+
+Supporting evidence:
+✓ Warranty active
+✓ Receipt available
+✓ Fault is normally covered
+
+Problems:
+✗ GTM disagrees with Python
+✗ Product serial differs from receipt
+✗ Previous unauthorized repair detected
+
+Required action:
+Reviewer verification required.
+
+Create a structured API representation such as:
+
+{
+“decision”: “Manual Review Required”,
+“supporting_evidence”: [
+{
+“code”: “warranty_active”,
+“message”: “Warranty is active.”
+}
+],
+“problems”: [
+{
+“code”: “model_disagreement”,
+“message”: “Python and GTM predictions disagree.”,
+“severity”: “medium”
+}
+],
+“required_action”: “Reviewer verification required.”
+}
+
+Keep machine-readable evidence separate from display formatting.
+
+This allows the React frontend to render explanation cards without parsing text.
+
+Make explanations:
+
+* deterministic where possible
+* understandable
+* specific
+* traceable to evidence
+* free of unnecessary ML terminology for customer-facing views
+
+Reviewer/admin views may expose more technical information.
+
+⸻
+
+PHASE 21 — MANUAL REVIEW SYSTEM
+
+Build a complete reviewer queue and review workflow.
+
+Manual review must integrate with the existing claims workflow rather than becoming a disconnected feature.
+
+Reviewers should be able to see:
+
+* claim ID
+* claimant information allowed by RBAC
+* original claim information
+* product details
+* uploaded documents
+* document previews where supported
+* OCR/extracted information
+* Python prediction
+* GTM prediction
+* confidence values
+* model comparison status
+* warranty policy
+* rules passed
+* rules failed
+* contradictions
+* duplicate warnings
+* current recommendation
+* explanation
+* claim history
+* prior reviewer actions
+
+Reviewer actions:
+
+* Approve
+* Reject
+* Request More Information
+* Override Automated Recommendation
+* Add Comment
+
+Critical Requirement
+
+Never overwrite the original machine results.
+
+Store:
+
+* original Python prediction
+* original Python confidence
+* original GTM prediction
+* original GTM confidence
+* model comparison result
+* automated final recommendation
+* explanation
+* reviewer decision
+* reviewer comment
+* reviewer ID
+* override reason
+* timestamp
+
+separately.
+
+Reviewer overrides must create an audit trail.
+
+The system must make it possible to answer:
+
+“What did the machines originally recommend?”
+
+and separately:
+
+“What did the human reviewer finally decide?”
+
+Add an immutable or append-oriented review history where practical.
+
+⸻
+
+DATABASE DESIGN
+
+Inspect the current schema before adding tables.
+
+Extend existing tables where appropriate rather than creating needless duplicates.
+
+Potential entities may include:
+
+prediction_results
+
+model_comparisons
+
+warranty_policies
+
+rule_evaluations
+
+contradictions
+
+duplicate_findings
+
+decision_results
+
+review_queue
+
+review_actions
+
+document_hashes
+
+However, choose the schema based on the current repository architecture.
+
+Do not mechanically create all tables if some concepts already exist.
+
+Add:
+
+* foreign keys
+* timestamps
+* indexes
+* uniqueness constraints where appropriate
+* status enums/check constraints where appropriate
+
+Create safe database migrations.
+
+Avoid storing important structured evidence as unqueryable plain text when JSONB is more appropriate.
+
+For PostgreSQL, consider JSONB for structured variable evidence while keeping frequently filtered fields normalized.
+
+⸻
+
+API DESIGN
+
+Create clean APIs required by the frontend.
+
+In addition to prediction endpoints, expose endpoints required for:
+
+* combined evaluation
+* retrieving decision results
+* reviewer queue
+* reviewer claim details
+* reviewer actions
+* requesting additional information
+* retrieving audit history
+
+Follow existing URL conventions.
+
+Possible examples:
+
+POST /api/predict/python
+
+POST /api/predict/gtm
+
+POST /api/claims/:id/evaluate
+
+GET /api/claims/:id/decision
+
+GET /api/reviewer/queue
+
+GET /api/reviewer/claims/:id
+
+POST /api/reviewer/claims/:id/approve
+
+POST /api/reviewer/claims/:id/reject
+
+POST /api/reviewer/claims/:id/request-info
+
+POST /api/reviewer/claims/:id/override
+
+POST /api/reviewer/claims/:id/comments
+
+GET /api/reviewer/claims/:id/audit-history
+
+Adapt these to the application’s existing routing conventions.
+
+Do not duplicate existing endpoints.
+
+Use proper HTTP status codes.
+
+Perform server-side validation.
+
+Do not trust claim IDs, reviewer IDs, or roles supplied by the frontend.
+
+Derive authenticated identity from JWT.
+
+⸻
+
+FRONTEND IMPLEMENTATION
+
+Inspect the current React application and integrate these features with the existing dashboard design.
+
+Do not create an unrelated visual system.
+
+Use existing:
+
+* layout
+* navigation
+* cards
+* typography
+* colors
+* spacing
+* tables
+* buttons
+* dialogs
+* React Query architecture
+* Axios client
+* authentication handling
+
+Build reviewer interfaces for:
+
+Reviewer Queue
+
+Show fields such as:
+
+* claim number
+* claimant
+* product
+* submitted date
+* automated recommendation
+* model comparison
+* duplicate risk
+* contradiction count
+* priority
+* queue status
+
+Support useful filtering and sorting.
+
+Possible filters:
+
+* awaiting review
+* model disagreement
+* duplicate warning
+* missing documents
+* high severity contradiction
+* oldest/newest
+
+⸻
+
+Claim Review Detail
+
+Provide clearly separated sections:
+
+Claim Information
+
+Original submitted data.
+
+Documents
+
+View/download supported documents.
+
+Python Model
+
+Prediction and confidence distribution.
+
+GTM Model
+
+Prediction and confidence distribution.
+
+Model Comparison
+
+Agreement status and confidence difference.
+
+Warranty Rules
+
+Show passed, failed, warning, and unknown rule results.
+
+Contradictions
+
+Show detected inconsistencies.
+
+Duplicate Detection
+
+Show duplicate indicators and related evidence.
+
+Automated Decision
+
+Display:
+
+* Likely Valid
+* Likely Invalid
+* Manual Review Required
+
+Include explanation.
+
+Reviewer Action Panel
+
+Actions:
+
+* Approve
+* Reject
+* Request More Information
+* Override Recommendation
+* Add Comment
+
+Require an explanation/comment for overrides and potentially rejection depending on project requirements.
+
+Use confirmation dialogs for consequential actions.
+
+Prevent accidental double submission.
+
+Refresh React Query caches after reviewer actions.
+
+⸻
+
+SECURITY REQUIREMENTS
+
+Enforce RBAC server-side.
+
+Customers must not be able to access reviewer/admin endpoints merely by modifying frontend routes.
+
+Reviewers must only have appropriate reviewer permissions.
+
+Admins may have broader visibility according to the current RBAC design.
+
+Do not expose:
+
+* internal stack traces
+* secrets
+* raw environment variables
+* unauthorized claimant data
+* other users’ uploaded files
+* sensitive duplicate-match details to unauthorized customers
+
+Validate file access permissions.
+
+Validate MIME/file type where the current upload system supports it.
+
+Do not trust filenames.
+
+Preserve existing secure upload behavior.
+
+⸻
+
+MODEL SAFETY AND RELIABILITY
+
+Model inference failures must not silently become valid claims.
+
+Represent failures explicitly.
+
+For example:
+
+{
+“status”: “error”,
+“model”: “gtm”,
+“error_code”: “MODEL_UNAVAILABLE”
+}
+
+If one model fails:
+
+* preserve the successful model output
+* mark comparison as incomplete
+* route the claim toward Manual Review Required where appropriate
+
+Do not fabricate the missing model output.
+
+Add timeout/error handling around model invocation where needed.
+
+⸻
+
+OBSERVABILITY
+
+Add structured logging for important events including:
+
+* Python inference
+* GTM inference
+* inference failures
+* model disagreement
+* high-severity contradictions
+* duplicate detections
+* final automated decisions
+* reviewer decisions
+* overrides
+* request-more-information actions
+
+Never log raw passwords, JWTs, secrets, or unnecessary sensitive claim data.
+
+Where the project already has monitoring/metrics infrastructure, integrate with it.
+
+⸻
+
+PERFORMANCE
+
+Avoid unnecessary model reloads for every HTTP request.
+
+Use safe model lifecycle management appropriate to the existing application architecture.
+
+Avoid N+1 database queries in reviewer screens.
+
+Use indexes for:
+
+* claim status
+* reviewer queue status
+* serial number
+* invoice number
+* document hash
+* claimant references
+* timestamps
+* recommendation status
+
+Paginate reviewer queue APIs.
+
+Do not fetch every claim into memory.
+
+⸻
+
+TESTING
+
+Add meaningful tests.
+
+Prediction API tests
+
+Test:
+
+* Python successful prediction
+* GTM successful prediction
+* invalid input
+* one model unavailable
+* confidence serialization
+* independent model operation
+
+Model comparison tests
+
+Test:
+
+* same class / close confidence
+* same class / large confidence difference
+* different classes
+* low confidence
+* threshold boundary cases
+
+Warranty tests
+
+Test:
+
+* active warranty
+* expired warranty
+* missing purchase date
+* invalid policy
+* exclusions
+* unauthorized repairs
+
+Contradiction tests
+
+Test:
+
+* purchase date after claim date
+* repair before purchase
+* fault date after claim
+* serial conflicts
+* product model conflicts
+
+Document tests
+
+Test:
+
+* identical file hashes
+* different file hashes
+* duplicate document detection
+
+Claim duplicate tests
+
+Test:
+
+* strong match
+* partial match
+* unrelated claims
+* fuzzy fault-description handling if implemented
+
+Decision engine tests
+
+Test:
+
+* strong valid case
+* strong invalid case
+* model disagreement
+* missing mandatory evidence
+* duplicate warning
+* contradiction
+* one model failure
+* multiple simultaneous issues
+
+Manual review tests
+
+Test:
+
+* reviewer access
+* unauthorized customer access
+* approve
+* reject
+* request information
+* override
+* required override reason
+* audit history
+* original model results preserved after override
+
+Add frontend tests where the repository already uses a frontend testing framework.
+
+⸻
+
+END-TO-END VERIFICATION
+
+After implementation, do not stop when individual files compile.
+
+Trace a complete claim through the system.
+
+Verify this flow:
+
+Claim submitted
+
+→ documents stored
+
+→ document hashes calculated
+
+→ Python prediction
+
+→ GTM prediction
+
+→ model comparison
+
+→ applicable warranty policy loaded
+
+→ warranty checks executed
+
+→ contradictions evaluated
+
+→ duplicate detection executed
+
+→ final automated decision generated
+
+→ explanation generated
+
+→ decision stored
+
+→ claim appears in correct reviewer queue when manual review is required
+
+→ reviewer opens the claim
+
+→ all documents and original machine outputs are visible
+
+→ reviewer takes action
+
+→ reviewer action is persisted
+
+→ machine results remain unchanged
+
+→ audit history shows both automated and human decisions
+
+→ dashboards reflect the updated claim status
+
+Verify both backend API and frontend behavior.
+
+⸻
+
+CODE QUALITY
+
+Follow SOLID principles where useful without overengineering.
+
+Prefer:
+
+routes/controllers
+→ services
+→ repositories/data layer
+
+instead of large route handlers containing business logic.
+
+Use:
+
+* type hints
+* docstrings where useful
+* explicit schemas
+* reusable enums/constants
+* centralized configuration
+* transaction boundaries
+* clear error classes
+
+Avoid:
+
+* giant service files
+* duplicated logic
+* magic confidence thresholds
+* hidden global mutable state
+* silent exception swallowing
+* placeholder implementations
+* fake model outputs
+* TODO-only implementations presented as finished
+* hard-coded user IDs
+* frontend-only RBAC
+* overwriting historical prediction results
+
+⸻
+
+MIGRATION AND BACKWARD COMPATIBILITY
+
+Before changing existing database entities or APIs:
+
+1. identify current consumers
+2. determine compatibility risks
+3. update consumers where required
+4. create migrations
+5. verify existing tests
+6. add new tests
+
+Do not destroy existing claim records.
+
+Do not reset the database as part of the implementation.
+
+⸻
+
+REQUIRED FINAL AUDIT
+
+After all phases are implemented, perform a repository-wide audit covering Phases 14–21.
+
+Check for:
+
+* broken imports
+* duplicate endpoints
+* inconsistent response types
+* missing migrations
+* unused services
+* frontend/backend field-name mismatches
+* invalid React Query keys
+* incorrect Axios paths
+* JWT/RBAC gaps
+* reviewer privilege escalation
+* stale data after mutations
+* model loading errors
+* GTM/Python label mismatch
+* incorrect confidence calculations
+* floating-point comparison issues
+* inconsistent dates/timezones
+* document hashing bugs
+* duplicate detection false assumptions
+* lost audit history
+* overwritten model results
+* failed transaction handling
+* N+1 queries
+* missing indexes
+* race conditions during reviewer actions
+* incomplete loading/error/empty states
+* responsive UI problems
+
+Fix discovered issues rather than merely listing them.
+
+⸻
+
+REQUIRED DELIVERABLE
+
+At completion, provide a concise engineering report containing:
+
+1. Existing Architecture Found
+
+Summarize the relevant architecture before your changes.
+
+2. Files Changed
+
+List important created/modified files.
+
+3. Database Changes
+
+List:
+
+* migrations
+* new tables
+* changed columns
+* indexes
+
+4. Prediction Architecture
+
+Explain how Python and GTM operate independently.
+
+5. Comparison Logic
+
+Document the consistency thresholds and configuration.
+
+6. Warranty Engine
+
+Explain where policies live and how they are loaded.
+
+7. Rule Checks
+
+List implemented rule checks.
+
+8. Duplicate Detection
+
+Explain both document and claim duplicate detection.
+
+9. Final Decision Logic
+
+Describe the deterministic decision flow.
+
+10. Manual Review Workflow
+
+Describe reviewer states and actions.
+
+11. API Endpoints
+
+List newly added or modified endpoints.
+
+12. Frontend Implementation
+
+List relevant reviewer components/pages/hooks/services.
+
+13. Security Review
+
+Explain RBAC protections and sensitive-data handling.
+
+14. Tests
+
+List tests added and their results.
+
+15. End-to-End Verification
+
+Clearly state which complete workflows were actually verified.
+
+16. Problems Found and Fixed
+
+Document bugs or architectural problems discovered during implementation.
+
+17. Remaining Limitations
+
+Do not hide unfinished work.
+
+Clearly distinguish:
+
+* completed
+* partially completed
+* blocked
+* intentionally deferred
+
+⸻
+
+IMPLEMENTATION PRIORITY
+
+Implement in dependency order:
+
+1. inspect existing architecture
+2. prediction result schemas
+3. Python prediction service
+4. GTM prediction service
+5. prediction APIs
+6. model comparison engine
+7. warranty policy engine
+8. rule checks
+9. SHA256 document hashing
+10. claim duplicate detection
+11. automated decision engine
+12. structured explanations
+13. persistence/audit schema
+14. reviewer backend APIs
+15. reviewer frontend queue
+16. reviewer detail page
+17. reviewer actions
+18. dashboard integration
+19. automated tests
+20. end-to-end verification
+21. repository-wide audit and corrections
+
+Do not mark the phases complete solely because endpoints exist.
+
+A phase is complete only when:
+
+backend logic
++
+database persistence
++
+authorization
++
+frontend integration where applicable
++
+tests
++
+end-to-end verification
+
+are functioning together.
+
+Begin by inspecting the existing repository and produce the implementation against the architecture you actually find.

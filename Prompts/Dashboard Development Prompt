@@ -1,0 +1,581 @@
+You are a senior full-stack engineer, UX designer, data visualization specialist, and analytics architect building the AssureX Claims Management System.
+
+Implement Phase 23: Dashboard System.
+
+Build production-ready dashboards for Customers, Claim Reviewers, and Administrators.
+
+The dashboards must provide real-time visibility into claims, warranties, fraud indicators, model performance, and operational metrics.
+
+---
+
+# Project Context
+
+AssureX is an AI-powered warranty and insurance claims platform.
+
+Users interact with the system through role-specific dashboards.
+
+Dashboard data must be:
+
+* Accurate
+* Role-based
+* Real-time or near real-time
+* Responsive
+* Secure
+* Scalable
+
+All dashboard access must be protected by JWT authentication and Role-Based Access Control (RBAC).
+
+---
+
+# Technology Stack
+
+Frontend:
+
+* React
+* React Router
+* React Query
+* Axios
+* Tailwind CSS
+* Chart.js or Recharts
+
+Backend:
+
+* Python
+* Flask
+* Flask-SQLAlchemy
+* Flask-JWT-Extended
+
+Database:
+
+* PostgreSQL
+
+---
+
+# Dashboard Requirements
+
+Create three separate dashboard experiences:
+
+1. Customer Dashboard
+2. Reviewer Dashboard
+3. Administrator Dashboard
+
+Users should only see information authorized for their role.
+
+---
+
+# Customer Dashboard
+
+Route:
+
+/dashboard/customer
+
+Purpose:
+
+Allow customers to monitor products, warranties, claims, and required actions.
+
+---
+
+## Summary Cards
+
+Display:
+
+### Registered Products
+
+Show:
+
+* Total registered products
+* Products currently covered
+* Products with expired warranties
+
+---
+
+### Active Warranties
+
+Show:
+
+* Count
+* Coverage percentage
+* Days remaining
+
+---
+
+### Expiring Warranties
+
+Show:
+
+* Warranties expiring within 30 days
+* Product names
+* Expiry dates
+
+---
+
+### Claims
+
+Show:
+
+* Total claims
+* Submitted claims
+* Approved claims
+* Rejected claims
+* Under review claims
+
+---
+
+## Claims Status Widget
+
+Display:
+
+* Claim ID
+* Product
+* Submission Date
+* Current Status
+* Last Updated
+
+Statuses:
+
+* Draft
+* Submitted
+* Manual Review
+* Approved
+* Rejected
+* Closed
+
+---
+
+## Missing Actions Widget
+
+Show:
+
+* Missing documents
+* Additional information requests
+* Expiring warranties
+* Incomplete registrations
+
+Allow users to navigate directly to the required action.
+
+---
+
+## Notifications Center
+
+Display:
+
+* Warranty expiry reminders
+* Claim updates
+* Reviewer requests
+* System notifications
+
+Include:
+
+* Read/unread state
+* Notification timestamps
+
+---
+
+## Charts
+
+Create:
+
+### Warranty Status Distribution
+
+Pie Chart
+
+Categories:
+
+* Active
+* Near Expiry
+* Expired
+* Extended Warranty
+
+---
+
+### Claims Over Time
+
+Line Chart
+
+Show:
+
+* Claims submitted per month
+* Claims approved per month
+
+---
+
+# Reviewer Dashboard
+
+Route:
+
+/dashboard/reviewer
+
+Purpose:
+
+Enable efficient investigation and resolution of claims requiring human review.
+
+---
+
+## Summary Cards
+
+Display:
+
+* Total Manual Review Claims
+* New Claims Today
+* Pending Reviews
+* Approved Reviews
+* Rejected Reviews
+
+---
+
+## Manual Review Queue
+
+Display:
+
+* Claim ID
+* Customer
+* Product
+* Risk Score
+* Submission Date
+* Priority Level
+
+Allow:
+
+* Open claim
+* Assign reviewer
+* Add notes
+
+---
+
+## Model Disagreement Claims
+
+Display claims where:
+
+* Multiple AI models disagree
+* Confidence thresholds differ
+* Fraud detection outputs conflict
+
+Show:
+
+* Claim ID
+* Model outputs
+* Confidence scores
+* Recommended action
+
+---
+
+## Missing Document Cases
+
+Display claims with:
+
+* Missing receipt
+* Missing warranty card
+* Missing serial number image
+* Missing diagnostic report
+
+Allow:
+
+* Request documents
+* Send reminder notification
+
+---
+
+## Duplicate Warning Queue
+
+Display suspected duplicate claims.
+
+Show:
+
+* Claim ID
+* Matching Claim IDs
+* Similarity Score
+* Duplicate Risk Level
+
+Allow:
+
+* Confirm duplicate
+* Reject duplicate warning
+
+---
+
+## Reviewer Analytics
+
+Create:
+
+### Claims by Review Outcome
+
+Bar Chart
+
+Categories:
+
+* Approved
+* Rejected
+* Escalated
+
+---
+
+### Risk Score Distribution
+
+Histogram
+
+Show claim risk score ranges.
+
+---
+
+# Administrator Dashboard
+
+Route:
+
+/dashboard/admin
+
+Purpose:
+
+Provide system-wide operational, business, and AI model insights.
+
+---
+
+## Executive Summary Cards
+
+Display:
+
+### Total Claims
+
+Show:
+
+* Total lifetime claims
+* Claims submitted today
+* Claims submitted this month
+
+---
+
+### Claim Outcomes
+
+Show:
+
+* Valid claims
+* Invalid claims
+* Manual review claims
+
+Display percentages.
+
+---
+
+### Model Disagreement Rate
+
+Calculate:
+
+Disagreement Rate =
+(Disagreement Claims / Total Processed Claims) × 100
+
+Display:
+
+* Percentage
+* Trend
+
+---
+
+### Average Model Confidence
+
+Calculate:
+
+Average confidence score across all processed claims.
+
+Display:
+
+* Current average
+* Weekly trend
+
+---
+
+### Duplicate Alerts
+
+Show:
+
+* Active duplicate investigations
+* Confirmed duplicates
+* False positives
+
+---
+
+## Operational Analytics
+
+Create:
+
+### Claims Volume Trend
+
+Line Chart
+
+Display:
+
+* Daily
+* Weekly
+* Monthly
+
+---
+
+### Claim Outcome Distribution
+
+Pie Chart
+
+Categories:
+
+* Approved
+* Rejected
+* Manual Review
+* Pending
+
+---
+
+### Warranty Status Distribution
+
+Bar Chart
+
+Categories:
+
+* Active
+* Near Expiry
+* Expired
+* Extended Warranty
+
+---
+
+### Reviewer Workload
+
+Display:
+
+* Claims per reviewer
+* Pending assignments
+* Average review time
+
+---
+
+### Fraud Detection Metrics
+
+Display:
+
+* High-risk claims
+* Medium-risk claims
+* Low-risk claims
+* Fraud detection rate
+
+---
+
+## AI Model Monitoring
+
+Display:
+
+* Model version
+* Accuracy
+* Precision
+* Recall
+* F1 Score
+* Confidence distribution
+
+Track historical performance.
+
+---
+
+## Trends Section
+
+Generate trends for:
+
+* Claim submissions
+* Claim approvals
+* Fraud detection events
+* Warranty expirations
+* Customer growth
+
+Allow:
+
+* Last 7 Days
+* Last 30 Days
+* Last 90 Days
+* Last 12 Months
+
+---
+
+# Backend Requirements
+
+Create dashboard service layer.
+
+Implement APIs:
+
+GET /api/dashboard/customer
+
+GET /api/dashboard/reviewer
+
+GET /api/dashboard/admin
+
+GET /api/dashboard/trends
+
+GET /api/dashboard/notifications
+
+GET /api/dashboard/analytics
+
+---
+
+# Security Requirements
+
+Implement:
+
+* JWT Authentication
+* RBAC Protection
+* Ownership checks
+* Audit logging
+* Rate limiting recommendations
+
+Verify:
+
+Customers cannot access reviewer/admin dashboards.
+
+Reviewers cannot access admin dashboards.
+
+Admins can access all dashboard data.
+
+---
+
+# Performance Requirements
+
+Implement:
+
+* Pagination
+* Lazy loading
+* Query optimization
+* Dashboard caching
+* Aggregation queries
+* Database indexes
+
+Prevent N+1 query issues.
+
+---
+
+# Testing Requirements
+
+Generate tests for:
+
+* Dashboard access control
+* Customer dashboard data
+* Reviewer dashboard data
+* Admin dashboard data
+* Analytics calculations
+* Trend calculations
+* Notification retrieval
+* Unauthorized access attempts
+
+Use pytest.
+
+---
+
+# Deliverables
+
+Provide:
+
+1. Frontend dashboard architecture
+2. React dashboard components
+3. Backend API endpoints
+4. Dashboard service layer
+5. Analytics queries
+6. Database optimizations
+7. Chart implementations
+8. Notification system integration
+9. RBAC protection
+10. Complete test suite
+11. API documentation
+12. Example API responses
+
+Generate complete, production-ready code with explanations for every major component.

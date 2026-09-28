@@ -1,0 +1,544 @@
+You are a senior backend engineer, search systems architect, database optimization specialist, and full-stack developer building the AssureX Claims Management System.
+
+Implement Phase 25: Advanced Search and Filtering.
+
+Build a production-ready search and filtering system that allows customers, reviewers, service-center employees, and administrators to quickly locate claims, products, warranties, and related records.
+
+The system must be fast, scalable, secure, and optimized for large datasets.
+
+---
+
+# Project Context
+
+AssureX is an AI-powered warranty and insurance claims platform.
+
+As claim volume grows, users need powerful search and filtering capabilities to find specific claims, products, warranties, and review cases.
+
+Search must work across dashboards, claim management pages, reviewer queues, and administrative tools.
+
+---
+
+# Objectives
+
+Implement advanced filtering and search for:
+
+* Claim ID
+* Product ID
+* Serial Number
+* Product Category
+* Warranty Status
+* Claim Status
+* Confidence Score
+* Reviewer
+* Date Range
+
+Support both individual filters and combinations of filters.
+
+---
+
+# Technology Stack
+
+Backend:
+
+* Python
+* Flask
+* SQLAlchemy
+* Marshmallow
+* Flask-JWT-Extended
+
+Frontend:
+
+* React
+* React Query
+* Axios
+* Tailwind CSS
+
+Database:
+
+* PostgreSQL
+
+---
+
+# Search Scope
+
+Search must support:
+
+## Claims
+
+Search by:
+
+* Claim ID
+* Product ID
+* Customer
+* Reviewer
+* Claim Status
+* Confidence Score
+* Submission Date
+* Review Date
+
+---
+
+## Products
+
+Search by:
+
+* Product ID
+* Product Name
+* Brand
+* Category
+* Model
+* Serial Number
+
+---
+
+## Warranties
+
+Search by:
+
+* Warranty Status
+* Provider
+* Expiry Date
+* Extended Warranty Status
+
+---
+
+# Required Filters
+
+Implement the following filters.
+
+---
+
+## Claim ID Filter
+
+Allow:
+
+Exact Match
+
+Example:
+
+CLM-2026-000001
+
+Requirements:
+
+* Fast lookup
+* Indexed query
+
+---
+
+## Product ID Filter
+
+Allow:
+
+Exact Match
+
+Example:
+
+PRD-2026-000145
+
+---
+
+## Serial Number Filter
+
+Allow:
+
+* Exact Match
+* Partial Match
+* Case-insensitive Match
+
+Examples:
+
+ABC123456
+
+ABC123
+
+---
+
+## Product Category Filter
+
+Allow filtering by:
+
+* Electronics
+* Mobile Devices
+* Home Appliances
+* Computers
+* Audio Equipment
+* Other
+
+Support multi-select.
+
+Example:
+
+Electronics + Computers
+
+---
+
+## Warranty Status Filter
+
+Supported statuses:
+
+* Active
+* Near Expiry
+* Expired
+* Extended Warranty
+
+Support multi-select.
+
+---
+
+## Claim Status Filter
+
+Supported statuses:
+
+* Draft
+* Submitted
+* Under Review
+* Manual Review
+* Approved
+* Rejected
+* Closed
+
+Support multi-select.
+
+---
+
+## Confidence Score Filter
+
+Support:
+
+Minimum Confidence
+
+Maximum Confidence
+
+Example:
+
+0.60 – 0.80
+
+OR
+
+60% – 80%
+
+Requirements:
+
+* Range filtering
+* Numeric validation
+
+---
+
+## Reviewer Filter
+
+Allow filtering by:
+
+* Reviewer ID
+* Reviewer Name
+
+Support:
+
+* Assigned reviewer
+* Unassigned claims
+
+Examples:
+
+Reviewer: John Smith
+
+Reviewer: Unassigned
+
+---
+
+## Date Range Filter
+
+Support:
+
+* Today
+* Last 7 Days
+* Last 30 Days
+* Last 90 Days
+* Custom Range
+
+Fields:
+
+* Submission Date
+* Review Date
+* Warranty Expiry Date
+
+---
+
+# Combined Filtering
+
+Support combining filters.
+
+Example:
+
+Claim Status = Manual Review
+
+AND
+
+Warranty Status = Active
+
+AND
+
+Confidence < 70%
+
+AND
+
+Date Range = Last 30 Days
+
+Generate optimized queries.
+
+---
+
+# Global Search
+
+Implement global search bar.
+
+Allow searching by:
+
+* Claim ID
+* Product ID
+* Serial Number
+* Customer Name
+* Reviewer Name
+
+Return grouped results.
+
+Example:
+
+Claims
+
+Products
+
+Warranties
+
+Users
+
+---
+
+# Sorting
+
+Support sorting by:
+
+* Newest First
+* Oldest First
+* Highest Confidence
+* Lowest Confidence
+* Recently Updated
+* Warranty Expiry Date
+
+Allow ascending and descending order.
+
+---
+
+# Pagination
+
+Implement:
+
+* Page Number
+* Page Size
+
+Defaults:
+
+Page = 1
+
+Page Size = 25
+
+Maximum Page Size = 100
+
+Return:
+
+* Total Records
+* Current Page
+* Total Pages
+
+---
+
+# Backend API Design
+
+Create endpoints:
+
+GET /api/search
+
+GET /api/claims/search
+
+GET /api/products/search
+
+GET /api/warranties/search
+
+GET /api/review/search
+
+---
+
+# Example Query Parameters
+
+/api/claims/search?
+
+claim_status=manual_review
+
+&warranty_status=active
+
+&min_confidence=0.6
+
+&max_confidence=0.8
+
+&reviewer_id=15
+
+&start_date=2026-01-01
+
+&end_date=2026-01-31
+
+&page=1
+
+&page_size=25
+
+---
+
+# Database Optimization
+
+Create indexes for:
+
+* claim_id
+* product_id
+* serial_number
+* warranty_status
+* claim_status
+* reviewer_id
+* created_at
+* confidence_score
+
+Review query plans.
+
+Optimize joins.
+
+Prevent full-table scans where possible.
+
+---
+
+# Security Requirements
+
+Implement:
+
+* JWT Authentication
+* RBAC Protection
+* Ownership Checks
+
+Verify:
+
+Customers can search only their own claims, products, and warranties.
+
+Reviewers can search assigned and reviewable claims.
+
+Employees can search authorized claims.
+
+Admins can search all records.
+
+Prevent unauthorized data exposure.
+
+---
+
+# Frontend Requirements
+
+Create reusable search interface.
+
+Components:
+
+* Search Bar
+* Filter Drawer
+* Advanced Filter Panel
+* Date Picker
+* Status Selector
+* Confidence Slider
+* Pagination Controls
+* Sort Controls
+
+Support:
+
+* Mobile
+* Tablet
+* Desktop
+
+---
+
+# User Experience
+
+Implement:
+
+* Instant filter updates
+* Loading states
+* Empty states
+* Saved filters
+* Clear all filters
+* Search suggestions
+* Recent searches
+
+---
+
+# Saved Searches
+
+Allow users to:
+
+* Save search criteria
+* Name saved searches
+* Reuse searches later
+* Delete saved searches
+
+Examples:
+
+"High Risk Claims"
+
+"Expiring Warranties"
+
+"Manual Review Queue"
+
+---
+
+# Analytics
+
+Track:
+
+* Most-used filters
+* Most common searches
+* Search response time
+* Failed searches
+
+Create admin analytics endpoint.
+
+---
+
+# Testing Requirements
+
+Generate pytest tests for:
+
+* Claim ID search
+* Product ID search
+* Serial number search
+* Warranty status filtering
+* Claim status filtering
+* Confidence filtering
+* Reviewer filtering
+* Date range filtering
+* Combined filters
+* Pagination
+* Sorting
+* Authorization restrictions
+
+---
+
+# Deliverables
+
+Provide:
+
+1. Search architecture
+2. Database models/updates
+3. Search service layer
+4. Query builder implementation
+5. Flask API routes
+6. SQLAlchemy filter logic
+7. React search components
+8. Saved search functionality
+9. Pagination system
+10. Sorting system
+11. Performance optimizations
+12. Analytics tracking
+13. Complete pytest suite
+14. API documentation
+15. Example request and response payloads
+
+Generate complete, production-ready code with explanations for every major component, following Flask, PostgreSQL, SQLAlchemy, React, and OWASP security best practices.

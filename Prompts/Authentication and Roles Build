@@ -1,0 +1,280 @@
+Implement Phase 3: Authentication and Role-Based Access Control (RBAC).
+
+## Project Context
+
+AssureX is an insurance claims platform where customers submit claims, reviewers inspect suspicious claims, and administrators manage the platform.
+
+The solution must be production-ready, secure, modular, and scalable.
+
+---
+
+## Objectives
+
+Build a complete authentication and authorization system including:
+
+* User registration
+* User login
+* User logout
+* Password hashing
+* JWT authentication
+* Role-based access control (RBAC)
+* Protected API endpoints
+* User management
+
+---
+
+## Technology Stack
+
+Use:
+
+* Python
+* Flask
+* Flask-SQLAlchemy
+* Flask-JWT-Extended
+* Flask-Bcrypt
+* Flask-Migrate
+* Marshmallow
+
+Follow Flask Blueprint architecture.
+
+---
+
+## User Roles
+
+Implement the following roles:
+
+### Customer
+
+Permissions:
+
+* Register account
+* Login/logout
+* Create claims
+* View own claims
+* Update own profile
+
+### Service Center Employee
+
+Permissions:
+
+* View assigned claims
+* Update claim processing status
+* Upload supporting documents
+
+### Claim Reviewer
+
+Permissions:
+
+* View claims flagged for manual review
+* Approve claims
+* Reject claims
+* Add review notes
+* View fraud-risk indicators
+
+### Administrator
+
+Permissions:
+
+* Full system access
+* Manage users
+* Manage roles
+* View analytics
+* Manage policies
+* Configure fraud detection settings
+* Access all claims
+
+---
+
+## Database Design
+
+Create a User model containing:
+
+* id
+* full_name
+* email
+* password_hash
+* role
+* is_active
+* created_at
+* updated_at
+
+Role values:
+
+* customer
+* employee
+* reviewer
+* admin
+
+Requirements:
+
+* Email must be unique
+* Passwords must never be stored in plain text
+* Password hashing must use Bcrypt
+* Include password verification methods
+
+---
+
+## Authentication Features
+
+### Registration Endpoint
+
+POST /api/auth/register
+
+Requirements:
+
+* Validate input
+* Validate email format
+* Check duplicate email
+* Hash password
+* Store user in database
+* Return success response
+
+---
+
+### Login Endpoint
+
+POST /api/auth/login
+
+Requirements:
+
+* Verify credentials
+* Generate JWT access token
+* Generate refresh token
+* Include user role in JWT claims
+* Return authenticated user details
+
+---
+
+### Logout Endpoint
+
+POST /api/auth/logout
+
+Requirements:
+
+* Revoke JWT token
+* Prevent token reuse
+* Return success response
+
+---
+
+## JWT Security
+
+Requirements:
+
+* Access tokens
+* Refresh tokens
+* Token expiration
+* Token revocation list
+* Secure token validation
+
+---
+
+## Authorization System
+
+Create a reusable RBAC decorator:
+
+@role_required(...)
+
+Examples:
+
+@role_required("admin")
+
+@role_required("reviewer")
+
+@role_required("employee", "admin")
+
+Decorator requirements:
+
+* Verify authenticated user
+* Verify role permissions
+* Return 403 for unauthorized access
+
+---
+
+## Protected Routes
+
+Create sample protected endpoints:
+
+### Customer
+
+POST /api/claims
+
+GET /api/claims/my
+
+### Employee
+
+GET /api/claims/assigned
+
+PATCH /api/claims/{id}/status
+
+### Reviewer
+
+GET /api/review/manual
+
+POST /api/review/{id}/approve
+
+POST /api/review/{id}/reject
+
+### Admin
+
+GET /api/admin/users
+
+POST /api/admin/users
+
+DELETE /api/admin/users/{id}
+
+GET /api/admin/analytics
+
+---
+
+## Security Requirements
+
+Implement:
+
+* Bcrypt password hashing
+* Input validation
+* JWT protection
+* SQL injection protection via ORM
+* Rate limiting recommendations
+* Role escalation prevention
+* Proper error handling
+* Secure environment variable management
+
+---
+
+## Testing
+
+Generate pytest test cases for:
+
+* Registration
+* Login
+* Invalid login
+* Token validation
+* Logout
+* Protected routes
+* Customer access
+* Employee access
+* Reviewer access
+* Admin access
+* Unauthorized access attempts
+
+---
+
+## Deliverables
+
+Provide:
+
+1. Project folder structure
+2. Database models
+3. Flask Blueprints
+4. Authentication routes
+5. RBAC decorator
+6. JWT configuration
+7. Middleware
+8. Example protected endpoints
+9. Test suite
+10. Setup instructions
+11. Environment variables (.env example)
+12. API documentation
+
+Generate complete, runnable code with explanations for each major component.
