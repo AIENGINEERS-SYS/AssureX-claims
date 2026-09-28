@@ -1,0 +1,111 @@
+{
+  "version": "2026.09",
+  "code": "appliances",
+  "policy_name": "AssureX Home Appliance Warranty Policy",
+  "product_category": "Home Appliances",
+  "categories": [
+    "appliance",
+    "appliances",
+    "home appliance",
+    "refrigerator",
+    "washing machine",
+    "freezer",
+    "air conditioner"
+  ],
+  "coverage_duration": {
+    "months": 24
+  },
+  "warranty_months": 24,
+  "warranty_start_conditions": {
+    "basis": "purchase_date",
+    "description": "Coverage begins on the verified purchase date and is limited by any earlier registered warranty expiry date."
+  },
+  "covered_faults": [
+    "manufacturing_defect",
+    "compressor_failure",
+    "control_board_failure",
+    "motor_failure",
+    "power_failure",
+    "cooling_failure",
+    "sensor_failure",
+    "installation_issue_when_authorized"
+  ],
+  "exclusions": [
+    "misuse",
+    "physical impact",
+    "wrong voltage",
+    "commercial use",
+    "unauthorized repair",
+    "improper installation",
+    "tampered serial number",
+    "normal wear"
+  ],
+  "claim_reporting_period_days": 30,
+  "repair_conditions": {
+    "prior_repairs_must_be_declared": true,
+    "authorized_repair_required": true,
+    "unauthorized_repair_invalidates": true,
+    "repair_report_required_when_prior_repair_exists": true
+  },
+  "authorized_service_centre_requirements": {
+    "required": true,
+    "evidence": [
+      "repair_report",
+      "service_center_name",
+      "repair_date",
+      "authorized_service_center"
+    ]
+  },
+  "replacement_conditions": [
+    "A covered major-component defect is confirmed and repair is not reasonable.",
+    "A repeated covered fault persists after authorized repair.",
+    "Replacement requires reviewer approval and may use an equivalent model."
+  ],
+  "grace_period_days": 0,
+  "mandatory_documents": [
+    "receipt",
+    "product_image",
+    "fault_evidence"
+  ],
+  "required_documents": [
+    "receipt",
+    "product_image",
+    "damage_evidence"
+  ],
+  "optional_documents": [
+    "warranty_card",
+    "serial_number_image",
+    "diagnostic_report",
+    "repair_report"
+  ],
+  "hard_fail_rules": [
+    "warranty_expired_before_claim_submission",
+    "confirmed_exclusion",
+    "confirmed_unauthorized_repair_when_policy_invalidates_coverage"
+  ],
+  "warning_rules": [
+    "near_warranty_expiry",
+    "low_ocr_confidence",
+    "missing_optional_document",
+    "claim_reported_close_to_reporting_deadline"
+  ],
+  "manual_review_rules": [
+    "serial_number_mismatch",
+    "product_model_mismatch",
+    "missing_mandatory_document",
+    "low_model_confidence",
+    "python_gtm_model_disagreement",
+    "large_confidence_difference",
+    "duplicate_claim_indicator",
+    "contradictory_dates",
+    "uncertain_installation_or_damage_cause"
+  ],
+  "authorized_repair_required": true,
+  "unauthorized_repair_invalidates": true,
+  "project_notes": "This policy intentionally keeps the appliance evidence requirement lighter than the generic electronics policy, matching the existing AssureX runtime policy.",
+  "source_basis": [
+    "AssureX project warranty-rule design",
+    "data/assurex_nigeria_policy_rules_v2.json",
+    "data/warranty_policies.json"
+  ]
+}
