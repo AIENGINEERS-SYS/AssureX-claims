@@ -394,7 +394,7 @@ class NotificationPreference(Timestamps, Base):
     __tablename__ = "notification_preferences"
     __table_args__ = (UniqueConstraint("user_id", name="uq_notification_preferences_user"),)
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
     warranty_reminders: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     claim_updates: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     information_requests: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
