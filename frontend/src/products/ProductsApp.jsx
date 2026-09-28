@@ -1,6 +1,6 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useParams} from 'react-router-dom';
-import {Box, Check, ChevronLeft, ChevronRight, LogIn, LogOut, PackagePlus, Pencil, Plus, ShieldCheck, Trash2} from 'lucide-react';
+import {Box, Check, CheckCircle2, ChevronLeft, ChevronRight, Eye, EyeOff, LockKeyhole, LogIn, LogOut, Mail, PackagePlus, Pencil, Plus, ShieldCheck, Trash2, UserRound} from 'lucide-react';
 import {api, errorMessage, getSession, setSession} from '../claims/api';
 import './products.css';
 
@@ -32,16 +32,81 @@ function ErrorBox({error}) {
   return error ? <div className="form-error" role="alert">{error}</div> : null;
 }
 
+function PasswordControl({label, name, value, onChange, autoComplete, describedBy}) {
+  const [visible, setVisible] = useState(false);
+  return <label className="auth-field">
+    <span className="auth-label-row"><span>{label}</span></span>
+    <span className="auth-input-shell">
+      <LockKeyhole size={17} aria-hidden="true" />
+      <input
+        name={name}
+        type={visible ? 'text' : 'password'}
+        value={value}
+        onChange={onChange}
+        autoComplete={autoComplete}
+        required
+        aria-describedby={describedBy}
+      />
+      <button
+        type="button"
+        className="password-toggle"
+        onClick={() => setVisible(current => !current)}
+        aria-label={visible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+        aria-pressed={visible}
+      >
+        {visible ? <EyeOff size={17} /> : <Eye size={17} />}
+      </button>
+    </span>
+  </label>;
+}
+
 function Auth({onAuth}) {
   const [mode, setMode] = useState('login');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const passwordBytes = useMemo(() => new TextEncoder().encode(password).length, [password]);
+  const passwordSignals = useMemo(() => ({
+    length: password.length >= 12,
+    byteLimit: passwordBytes <= 72,
+    mixedCase: /[a-z]/.test(password) && /[A-Z]/.test(password),
+    numberOrSymbol: /[0-9]|[^A-Za-z0-9]/.test(password),
+  }), [password, passwordBytes]);
+  const strength = [passwordSignals.length, passwordSignals.mixedCase, passwordSignals.numberOrSymbol,
+    password.length >= 16].filter(Boolean).length;
+  const strengthLabel = password ? ['Weak', 'Fair', 'Good', 'Strong', 'Very strong'][strength] : 'Not set';
+  const passwordsMatch = !confirmPassword || password === confirmPassword;
+
+  function changeMode(nextMode) {
+    setMode(nextMode);
+    setError('');
+    setPassword('');
+    setConfirmPassword('');
+  }
 
   async function submit(event) {
     event.preventDefault();
-    setBusy(true);
     setError('');
-    const values = Object.fromEntries(new FormData(event.currentTarget));
+
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+
+    if (mode === 'register') {
+      if (!passwordSignals.length || !passwordSignals.byteLimit) {
+        setError('Use a password with at least 12 characters and no more than 72 UTF-8 bytes.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError('The passwords do not match. Re-enter the confirmation password.');
+        return;
+      }
+    }
+
+    setBusy(true);
+    const values = Object.fromEntries(new FormData(form));
+    delete values.confirm_password;
     try {
       if (mode === 'register') await api.post('/auth/register', values);
       const {data} = await api.post('/auth/login', {email: values.email, password: values.password});
@@ -54,29 +119,126 @@ function Auth({onAuth}) {
       setSession(data);
       onAuth(data.user);
     } catch (requestError) {
-      setError(requestError.response ? errorMessage(requestError) : requestError.message);
+      if (requestError.response) setError(errorMessage(requestError));
+      else if (requestError.isAxiosError) setError('Unable to reach the AssureX API. Check your connection and try again.');
+      else setError(requestError.message || 'Something went wrong. Please try again.');
     } finally {
       setBusy(false);
     }
   }
 
-  return <div className="products-auth"><section className="panel auth-panel">
-    <p className="eyebrow">WELCOME TO ASSUREX</p>
-    <h1>{mode === 'register' ? 'Create your account' : 'Sign in to your products'}</h1>
-    <p className="muted">Keep your products and warranty information together.</p>
-    <form id="auth-form" onSubmit={submit}>
-      {mode === 'register' && <label>Full name<input name="full_name" autoComplete="name" required maxLength="201" /></label>}
-      <label>Email address<input name="email" type="email" autoComplete="username" required maxLength="320" /></label>
-      <label>Password<input name="password" type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} required minLength={mode === 'register' ? 12 : 1} /></label>
-      <ErrorBox error={error} />
-      <button id="auth-submit" type="submit" className="button full-width" disabled={busy}><LogIn size={16} />{busy ? 'Signing in...' : mode === 'register' ? 'Create account' : 'Sign in'}</button>
-    </form>
-    <p className="auth-toggle">{mode === 'register' ? 'Already have an account?' : 'New to AssureX?'}{' '}
-      <button type="button" className="text-button" onClick={() => {setMode(mode === 'register' ? 'login' : 'register');setError('');}}>
-        {mode === 'register' ? 'Sign in' : 'Create an account'}
-      </button>
-    </p>
-  </section></div>;
+  return <div className="products-auth">
+    <div className="auth-shell">
+      <aside className="auth-story" aria-label="About AssureX">
+        <a className="auth-brand" href="/products" aria-label="AssureX home">
+          <span className="brand-mark" aria-hidden="true">A</span>
+          <span>Assure<span>X</span></span>
+        </a>
+        <div className="auth-story-copy">
+          <p className="eyebrow">CLAIMS MADE CLEAR</p>
+          <h2>Keep protection details organised before you need them.</h2>
+          <p>One workspace for products, warranties, documents and claims, without hunting through receipts when something breaks.</p>
+          <ul className="auth-benefits">
+            <li><CheckCircle2 size={18} /><span><strong>Track products and warranty cover</strong><small>Keep purchase and protection details in one place.</small></span></li>
+            <li><CheckCircle2 size={18} /><span><strong>Prepare claims with less friction</strong><small>Move from product records to claim evidence cleanly.</small></span></li>
+            <li><CheckCircle2 size={18} /><span><strong>Review decisions with context</strong><small>Keep claim information and supporting analysis together.</small></span></li>
+          </ul>
+        </div>
+        <p className="auth-story-footer"><ShieldCheck size={16} /> Your account credentials are handled by the AssureX API.</p>
+      </aside>
+
+      <section className="auth-stage">
+        <div className="panel auth-panel">
+          <div className="auth-heading">
+            <p className="eyebrow">{mode === 'register' ? 'CREATE YOUR ASSUREX ACCOUNT' : 'WELCOME BACK'}</p>
+            <h1>{mode === 'register' ? 'Create your account' : 'Sign in to AssureX'}</h1>
+            <p>{mode === 'register'
+              ? 'Start with your account details. You can add products and warranty information next.'
+              : 'Access your products, warranties and claim workspace.'}</p>
+          </div>
+
+          <div className="auth-mode-switch" role="tablist" aria-label="Account access">
+            <button type="button" role="tab" aria-selected={mode === 'login'} className={mode === 'login' ? 'active' : ''} onClick={() => changeMode('login')}>Sign in</button>
+            <button type="button" role="tab" aria-selected={mode === 'register'} className={mode === 'register' ? 'active' : ''} onClick={() => changeMode('register')}>Create account</button>
+          </div>
+
+          <form id="auth-form" onSubmit={submit} noValidate>
+            {mode === 'register' && <label className="auth-field">
+              <span className="auth-label-row"><span>Full name</span><small>Required</small></span>
+              <span className="auth-input-shell">
+                <UserRound size={17} aria-hidden="true" />
+                <input name="full_name" autoComplete="name" required maxLength="201" placeholder="e.g. Stephen Ordu" />
+              </span>
+            </label>}
+
+            <label className="auth-field">
+              <span className="auth-label-row"><span>Email address</span><small>Required</small></span>
+              <span className="auth-input-shell">
+                <Mail size={17} aria-hidden="true" />
+                <input name="email" type="email" autoComplete="username" required maxLength="320" inputMode="email" placeholder="you@example.com" />
+              </span>
+            </label>
+
+            <PasswordControl
+              label="Password"
+              name="password"
+              value={password}
+              onChange={event => setPassword(event.target.value)}
+              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+              describedBy={mode === 'register' ? 'password-guidance' : undefined}
+            />
+
+            {mode === 'register' && <>
+              <div className="password-health" id="password-guidance" aria-live="polite">
+                <div className="password-strength-row"><span>Password strength</span><strong>{strengthLabel}</strong></div>
+                <div className="password-strength" aria-hidden="true">
+                  {[1, 2, 3, 4].map(level => <span key={level} className={strength >= level ? 'active' : ''} />)}
+                </div>
+                <div className="password-rules">
+                  <span className={passwordSignals.length ? 'met' : ''}><Check size={13} /> At least 12 characters</span>
+                  <span className={passwordSignals.byteLimit && password ? 'met' : ''}><Check size={13} /> Maximum 72 UTF-8 bytes</span>
+                  <span className={passwordSignals.mixedCase ? 'met' : ''}><Check size={13} /> Upper & lowercase recommended</span>
+                  <span className={passwordSignals.numberOrSymbol ? 'met' : ''}><Check size={13} /> Number or symbol recommended</span>
+                </div>
+              </div>
+
+              <PasswordControl
+                label="Retype password"
+                name="confirm_password"
+                value={confirmPassword}
+                onChange={event => setConfirmPassword(event.target.value)}
+                autoComplete="new-password"
+                describedBy="password-match-status"
+              />
+              <p id="password-match-status" className={`password-match ${confirmPassword ? (passwordsMatch ? 'match' : 'mismatch') : ''}`}>
+                {confirmPassword ? (passwordsMatch ? 'Passwords match.' : 'Passwords do not match yet.') : 'Retype your password to confirm it.'}
+              </p>
+            </>}
+
+            <ErrorBox error={error} />
+
+            <button id="auth-submit" type="submit" className="button full-width auth-submit" disabled={busy}>
+              <LogIn size={17} />
+              {busy ? (mode === 'register' ? 'Creating account...' : 'Signing in...') : mode === 'register' ? 'Create account' : 'Sign in'}
+            </button>
+          </form>
+
+          <div className="auth-assurance">
+            <ShieldCheck size={17} aria-hidden="true" />
+            <span>{mode === 'register'
+              ? 'Use a unique password you do not reuse on other services.'
+              : 'Only sign in on a device you trust, especially on shared networks.'}</span>
+          </div>
+
+          <p className="auth-toggle">{mode === 'register' ? 'Already have an account?' : 'New to AssureX?'}{' '}
+            <button type="button" className="text-button" onClick={() => changeMode(mode === 'register' ? 'login' : 'register')}>
+              {mode === 'register' ? 'Sign in instead' : 'Create an account'}
+            </button>
+          </p>
+        </div>
+      </section>
+    </div>
+  </div>;
 }
 
 function Layout({user, onSignOut}) {
