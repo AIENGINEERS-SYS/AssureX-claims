@@ -18,7 +18,10 @@ def test_dashboard_migration_round_trip(tmp_path, monkeypatch):
     after = MetaData();after.reflect(engine)
     with engine.connect() as connection:
         assert connection.execute(select(after.tables["claims"])).mappings().one()["assigned_reviewer_id"] is None
-        assert connection.execute(select(after.tables["notifications"])).mappings().one()["message"] == "Still visible"
+        notification = connection.execute(select(after.tables["notifications"])).mappings().one()
+        assert notification["message"] == "Still visible"
+        assert notification["reference_type"] == "claim"
+        assert notification["reference_id"] == "DRF-legacy"
         assert not connection.exec_driver_sql("PRAGMA foreign_key_check").all()
     command.downgrade(cfg, "b761a04c9f2e")
     assert "assigned_reviewer_id" not in {c["name"] for c in inspect(engine).get_columns("claims")}

@@ -200,15 +200,14 @@ def update_preferences():
         .with_for_update()
     )
     if item is None:
-        item = NotificationPreference(user_id=current_user.id)
-        db.session.add(item)
         try:
-            db.session.flush()
+            with db.session.begin_nested():
+                item = NotificationPreference(user_id=current_user.id)
+                db.session.add(item)
+                db.session.flush()
         except IntegrityError:
-            # Two first-time preference updates can race on the unique user_id.
-            # Roll back only this request, lock the winner's row, then apply the
-            # caller's requested values instead of surfacing a spurious 409.
-            db.session.rollback()
+            # A savepoint preserves the rest of this request if two first-time
+            # preference updates race on the unique user_id.
             item = db.session.scalar(
                 select(NotificationPreference)
                 .where(NotificationPreference.user_id == current_user.id)
@@ -256,16 +255,67 @@ def analytics():
         .group_by(Notification.priority)
         .order_by(Notification.priority)
     ).all()
-    timings = db.session.execute(
-        select(Notification.created_at, Notification.read_at)
-        .where(base, Notification.read_at.is_not(None))
-    ).all()
-    seconds = [
-        max(0.0, (read_at - created_at).total_seconds())
-        for created_at, read_at in timings
-        if created_at is not None and read_at is not None
-    ]
-    average_seconds = round(sum(seconds) / len(seconds), 2) if seconds else None
+    dialect = db.session.get_bind().dialect.name
+    if dialect == "postgresql":
+        average_expr = func.avg(func.extract(
+            "epoch", Notification.read_at - Notification.created_at
+        ))
+    elif dialect == "sqlite":
+        average_expr = func.avg(
+            (func.julianday(Notification.read_at) - func.julianday(Notification.created_at)) * 86400.0
+        )
+    else:
+        average_expr = None
+
+    if average_expr is not None:
+        average_value = db.session.scalar(
+            select(average_expr).where(base, Notification.read_at.is_not(None))
+        )
+        average_seconds = round(max(0.0, float(average_value)), 2) if average_value is not None else None
+    else:
+        timings = db.session.execute(
+            select(Notification.created_at, Notification.read_at)
+            .where(base, Notification.read_at.is_not(None))
+        ).all()
+        seconds = [
+            max(0.0, (read_at - created_at).total_seconds())
+            for created_at, read_at in timings
+            if created_at is not None and read_at is not None
+        ]
+        average_seconds = round(sum(seconds) / len(seconds), 2) if seconds else None
+
+    active_unread = (
+        base,
+        Notification.deleted_at.is_(None),
+        Notification.is_read.is_(False),
+    )
+    critical_unread = db.session.scalar(select(func.count(Notification.id)).where(
+        *active_unread, Notification.priority == NotificationPriority.CRITICAL.value
+    )) or 0
+    high_unread = db.session.scalar(select(func.count(Notification.id)).where(
+        *active_unread, Notification.priority.in_(
+            (NotificationPriority.HIGH.value, NotificationPriority.CRITICAL.value)
+        )
+    )) or 0
+    stale_high = db.session.scalar(select(func.count(Notification.id)).where(
+        *active_unread,
+        Notification.priority.in_((NotificationPriority.HIGH.value, NotificationPriority.CRITICAL.value)),
+        Notification.created_at < utcnow() - timedelta(hours=24),
+    )) or 0
+
+    system_alerts = []
+    if critical_unread:
+        system_alerts.append({
+            "severity": "CRITICAL",
+            "title": "Critical notifications awaiting attention",
+            "message": f"{critical_unread} critical notification(s) remain unread.",
+        })
+    if stale_high:
+        system_alerts.append({
+            "severity": "HIGH",
+            "title": "High-priority notifications are aging",
+            "message": f"{stale_high} high-priority notification(s) have been unread for more than 24 hours.",
+        })
 
     return {
         "period_days": days,
@@ -276,6 +326,10 @@ def analytics():
         "most_common_notification_type": type_rows[0][0] if type_rows else None,
         "by_type": {kind: count for kind, count in type_rows},
         "by_priority": {priority: count for priority, count in priority_rows},
+        "unread_high_priority": high_unread,
+        "unread_critical": critical_unread,
+        "stale_high_priority": stale_high,
+        "system_alerts": system_alerts,
     }
 
 

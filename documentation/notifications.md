@@ -232,3 +232,18 @@ python -m flask --app backend:create_app db upgrade
 ~~~
 
 The existing Railway start sequence should run migrations before starting the production web server.
+
+
+## Audit hardening
+
+The Phase 24 audit adds several production safeguards:
+
+- Idempotency keys are normalized to the PostgreSQL `VARCHAR(160)` limit with a stable SHA-256 suffix when needed.
+- Dedupe inserts use a database savepoint so a concurrent duplicate notification cannot roll back the surrounding claim transaction.
+- First-time preference creation also uses a savepoint, avoiding a full request rollback if two updates race.
+- Legacy Phase 23 notification references are backfilled to public claim/product IDs, so search by `CLM-...` or `PRD-...` works for migrated rows.
+- Admin analytics computes average read time in SQL on PostgreSQL/SQLite and reports active critical/high-priority unread alerts.
+- Global analytics indexes cover created date, type/date, and priority/read/date queries.
+- CI runs the complete backend test suite, a frontend production build, SQLite migrations, and a PostgreSQL migration smoke test.
+
+Warranty scheduling uses catch-up semantics. If the job misses an exact threshold day, the next run emits the nearest missed reminder once, keyed to the configured threshold. For example, a warranty first seen at 29 days receives the 30-day reminder with the message reporting the actual 29 days remaining.

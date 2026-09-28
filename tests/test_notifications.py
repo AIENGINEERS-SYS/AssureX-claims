@@ -4,13 +4,14 @@ from decimal import Decimal
 
 from sqlalchemy import inspect, select
 
-from backend.db.models import Claim, Notification, NotificationPreference, Product, Warranty
+from backend.db.models import Claim, Notification, NotificationPreference, Product, Warranty, utcnow
 from backend.extensions import db
 from backend.services.notifications import (
     NotificationPriority,
     NotificationService,
     NotificationType,
     create_warranty_reminders,
+    normalized_dedupe_key,
 )
 from test_auth import app, client, accounts, claims, login, bearer  # noqa: F401
 
@@ -25,6 +26,9 @@ def test_notification_schema_is_migrated(app):
         columns = {column["name"] for column in inspector.get_columns("notifications")}
         assert {"reference_type", "reference_id", "priority", "deleted_at"} <= columns
         assert "notification_preferences" in inspector.get_table_names()
+        indexes = {item["name"] for item in inspector.get_indexes("notifications")}
+        assert {"ix_notifications_created_at", "ix_notifications_type_created",
+                "ix_notifications_priority_read_created"} <= indexes
 
 
 def test_notification_creation_retrieval_and_ownership(client, app, accounts, claims):
@@ -46,6 +50,37 @@ def test_notification_creation_retrieval_and_ownership(client, app, accounts, cl
     assert client.get(f"/api/notifications/{other_id}", headers=customer).status_code == 404
     assert client.patch(f"/api/notifications/{other_id}/read", headers=customer).status_code == 404
     assert client.delete(f"/api/notifications/{other_id}", headers=customer).status_code == 404
+
+
+def test_long_dedupe_keys_are_stable_and_safe(app, accounts):
+    raw = "notification:" + ("very-long-component:" * 20)
+    normalized = normalized_dedupe_key(raw)
+    assert normalized is not None and len(normalized) <= 160
+    assert normalized == normalized_dedupe_key(raw)
+
+    with app.app_context():
+        service = NotificationService()
+        first = service.create_notification(
+            user_id=accounts["customer"],
+            notification_type=NotificationType.CLAIM_SUBMITTED,
+            title="Idempotent event",
+            message="Created once.",
+            dedupe_key=raw,
+        )
+        second = service.create_notification(
+            user_id=accounts["customer"],
+            notification_type=NotificationType.CLAIM_SUBMITTED,
+            title="Idempotent event",
+            message="Created once.",
+            dedupe_key=raw,
+        )
+        db.session.commit()
+        assert first is not None
+        assert second is None
+        assert first.dedupe_key == normalized
+        assert db.session.scalar(select(Notification).where(
+            Notification.dedupe_key == normalized
+        )) is not None
 
 
 def test_read_state_mark_all_delete_and_unread_count(client, app, accounts):
@@ -321,13 +356,14 @@ def test_admin_notification_analytics(client, app, accounts):
                 notification_type=NotificationType.CLAIM_SUBMITTED if index < 3 else NotificationType.CLAIM_APPROVED,
                 title=f"Analytics {index}",
                 message="Notification analytics fixture.",
-                priority=NotificationPriority.HIGH if index == 3 else NotificationPriority.MEDIUM,
+                priority=NotificationPriority.CRITICAL if index == 3 else NotificationPriority.MEDIUM,
                 dedupe_key=f"test:analytics:{index}",
             )
             if index < 2:
-                from backend.db.models import utcnow
                 item.is_read = True
                 item.read_at = utcnow()
+            elif index == 3:
+                item.created_at = utcnow() - timedelta(days=2)
         db.session.commit()
 
     assert client.get("/api/notifications/analytics").status_code == 401
@@ -338,6 +374,11 @@ def test_admin_notification_analytics(client, app, accounts):
     assert result.json["notifications_read"] == 2
     assert result.json["read_rate"] == 50.0
     assert result.json["most_common_notification_type"] == "CLAIM_SUBMITTED"
+    assert result.json["unread_high_priority"] == 1
+    assert result.json["unread_critical"] == 1
+    assert result.json["stale_high_priority"] == 1
+    assert {item["severity"] for item in result.json["system_alerts"]} == {"HIGH", "CRITICAL"}
+    assert result.json["average_time_to_read_seconds"] is not None
 
 
 def test_notification_endpoints_require_authentication(client):

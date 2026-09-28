@@ -394,7 +394,7 @@ class NotificationPreference(Timestamps, Base):
     __tablename__ = "notification_preferences"
     __table_args__ = (UniqueConstraint("user_id", name="uq_notification_preferences_user"),)
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     warranty_reminders: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     claim_updates: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     information_requests: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -408,6 +408,9 @@ Index("ix_notifications_user_type_created", Notification.user_id, Notification.n
 Index("ix_notifications_user_priority_created", Notification.user_id, Notification.priority, Notification.created_at)
 Index("ix_notifications_reference", Notification.reference_type, Notification.reference_id)
 Index("ix_notifications_user_unread_created", Notification.user_id, Notification.is_read, Notification.created_at)
+Index("ix_notifications_created_at", Notification.created_at)
+Index("ix_notifications_type_created", Notification.notification_type, Notification.created_at)
+Index("ix_notifications_priority_read_created", Notification.priority, Notification.is_read, Notification.created_at)
 Index("ix_claims_user_updated", Claim.user_id, Claim.updated_at)
 Index("ix_claims_review_queue", Claim.status, Claim.assigned_reviewer_id, Claim.submitted_at)
 Index("ix_reviews_reviewer_date", Review.reviewer_user_id, Review.reviewed_at)

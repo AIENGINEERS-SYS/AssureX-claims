@@ -133,6 +133,13 @@ function NotificationAnalytics() {
   </div>}</QueryState>;
 }
 
+function SystemNotificationAlerts() {
+  const result = query('notification-analytics', '/notifications/analytics', {days: 30});
+  return <QueryState result={result}>{data => data.system_alerts?.length ? <div>{data.system_alerts.map((item, index) =>
+    <div className="list-row" key={`${item.severity}-${index}`}><span><strong>{item.title}</strong><br/><small>{item.message}</small></span><Tone status={item.severity}/></div>)}</div> :
+    <Empty message="No active notification delivery alerts."/>}</QueryState>;
+}
+
 function Customer({adminView = false}) {
   const [searchParams] = useSearchParams(), userId = adminView ? Number(searchParams.get('user_id')) : undefined;
   const [page, setPage] = useState(1), result = query('customer', '/dashboard/customer', {page, per_page: 8, user_id: userId});
@@ -274,7 +281,7 @@ function Admin() {
     <div className="two-col"><Panel title="Model confidence distribution"><Distribution values={data.charts.confidence_distribution} type="bar"/></Panel>
       <Panel title="Customer growth"><QueryState result={period}>{trend => <Timeline series={trend.series} keys={['customers']}/>}</QueryState></Panel></div>
     <div className="two-col"><Panel title="Notification statistics" caption="Last 30 days"><NotificationAnalytics/></Panel>
-      <Panel title="System alerts" caption="Notification delivery health"><div className="empty">In-app notification delivery is active. Delivery failures from future email, SMS, and push channels can surface here.</div></Panel></div>
+      <Panel title="System alerts" caption="Unread high-priority notification health"><SystemNotificationAlerts/></Panel></div>
     <div className="two-col"><Panel title="Warranty expirations"><QueryState result={period}>{trend => <Timeline series={trend.series} keys={['warranty_expirations']}/>}</QueryState></Panel></div></>}</QueryState>;
 }
 

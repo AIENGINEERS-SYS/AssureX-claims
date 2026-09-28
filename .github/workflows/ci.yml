@@ -12,6 +12,20 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: assurex_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d assurex_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       ASSUREX_ENV: development
       DATABASE_URL: sqlite:////tmp/assurex-ci.sqlite3
@@ -34,6 +48,10 @@ jobs:
       - name: Compile Python
         run: python -m compileall -q backend tests
       - name: Apply migrations
+        run: python -m flask --app backend:create_app db upgrade
+      - name: PostgreSQL migration smoke test
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/assurex_ci
         run: python -m flask --app backend:create_app db upgrade
       - name: Run backend test suite
         run: pytest -q tests

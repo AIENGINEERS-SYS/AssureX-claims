@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
+from hashlib import sha256
 from typing import Iterable, Protocol
 
 from flask import current_app
@@ -48,6 +49,20 @@ PREFERENCE_FIELD = {
     NotificationType.CLAIM_APPROVED: "claim_updates",
     NotificationType.CLAIM_REJECTED: "claim_updates",
 }
+
+
+MAX_DEDUPE_KEY_LENGTH = 160
+
+
+def normalized_dedupe_key(value: str | None) -> str | None:
+    """Keep idempotency keys within the PostgreSQL column limit deterministically."""
+    if value is None:
+        return None
+    value = str(value)
+    if len(value) <= MAX_DEDUPE_KEY_LENGTH:
+        return value
+    digest = sha256(value.encode("utf-8")).hexdigest()[:32]
+    return f"{value[:MAX_DEDUPE_KEY_LENGTH - len(digest) - 1]}:{digest}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +176,8 @@ class NotificationService:
             raise ValueError("Notification title and message are required.")
         if not self._enabled(user_id, notification_type, preference):
             return None
+
+        dedupe_key = normalized_dedupe_key(dedupe_key)
         if not skip_existing_check and self._existing(dedupe_key):
             return None
         event = NotificationEvent(
@@ -175,14 +192,34 @@ class NotificationService:
             product_id=product_id,
             dedupe_key=dedupe_key,
         )
-        # In-app is the authoritative first channel. Additional channels may be
-        # added later and can enqueue outbox work from the same event.
-        delivered = None
-        for channel in self.channels:
-            item = channel.deliver(event)
-            if channel.name == "in_app":
-                delivered = item
-        return delivered
+
+        def deliver():
+            delivered = None
+            for channel in self.channels:
+                item = channel.deliver(event)
+                if channel.name == "in_app":
+                    delivered = item
+            return delivered
+
+        if dedupe_key is None:
+            return deliver()
+
+        # Flush caller-owned domain changes before opening the savepoint. This
+        # prevents an unrelated integrity failure in the claim transaction from
+        # being mistaken for a notification dedupe collision.
+        db.session.flush()
+        try:
+            with db.session.begin_nested():
+                delivered = deliver()
+                db.session.flush()
+            return delivered
+        except IntegrityError:
+            # The unique dedupe key is the concurrency backstop for double-clicks,
+            # retries and overlapping workers. Only swallow the error if another
+            # transaction actually created this same event.
+            if self._existing(dedupe_key):
+                return None
+            raise
 
     def send_claim_submitted(self, claim: Claim) -> Notification | None:
         return self.create_notification(
@@ -433,7 +470,7 @@ def create_warranty_reminders() -> int:
         preference = preferences.get(product.user_id)
         if not service._enabled(product.user_id, NotificationType.WARRANTY_EXPIRY, preference):
             continue
-        key = (
+        key = normalized_dedupe_key(
             f"notification:{product.user_id}:warranty:{warranty.id}:"
             f"{warranty.expiry_date.isoformat()}:{threshold_days}"
         )
@@ -451,22 +488,16 @@ def create_warranty_reminders() -> int:
     for product, warranty, days_remaining, threshold_days, preference, key in due:
         if key in existing:
             continue
-        try:
-            with db.session.begin_nested():
-                item = service.send_warranty_expiry_alert(
-                    product,
-                    warranty,
-                    days_remaining,
-                    threshold_days=threshold_days,
-                    preference=preference,
-                    skip_existing_check=True,
-                )
-                if item is None:
-                    continue
-                db.session.flush()
+        item = service.send_warranty_expiry_alert(
+            product,
+            warranty,
+            days_remaining,
+            threshold_days=threshold_days,
+            preference=preference,
+            skip_existing_check=True,
+        )
+        if item is not None:
             created += 1
-        except IntegrityError:
-            continue
 
     db.session.commit()
     return created
