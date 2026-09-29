@@ -1,6 +1,6 @@
 # Reports and exports
 
-The report center at `/reports` uses the existing JWT session and database roles. Customers see their own records; employees see assigned claims; reviewers see explicitly assigned claims; administrators can request system-wide reports. An unassigned manual-review claim is **not** reportable by a reviewer. Customer-wide reports require the customer themselves or an administrator. Staff product reports include only claims and warranties within their assignment scope.
+The report center at `/reports` uses the existing JWT session and database roles. Customers see their own records through a non-technical report view; employees see assigned claims; reviewers see explicitly assigned claims; administrators can request system-wide reports. An unassigned manual-review claim is **not** reportable by a reviewer. Customer-wide reports require the customer themselves or an administrator. Staff product reports include only claims and warranties within their assignment scope.
 
 ## Components
 
@@ -13,7 +13,7 @@ The report center at `/reports` uses the existing JWT session and database roles
 
 ## Run locally or deploy
 
-Install the updated root/backend requirements and build the frontend as usual. Apply migrations **before** starting the new API. Start a dedicated worker with the same database, configuration and private storage volume as the web process:
+Install the updated root/backend requirements and build the frontend as usual. Apply migrations **before** starting the API. During local development, start a worker with the same database, configuration and private storage as the web process:
 
 ```powershell
 .venv\Scripts\python.exe -m flask --app backend:create_app db upgrade
@@ -22,8 +22,11 @@ Install the updated root/backend requirements and build the frontend as usual. A
 .venv\Scripts\python.exe -m flask --app backend:create_app report-worker --once
 ```
 
+In production, `scripts/railpack-start.sh` starts the report worker inside the Railway API service by default. The worker runs with `MODEL_PRELOAD_ENABLED=false` and `MODEL_PRELOAD_STRICT=false` so it does not duplicate the Python/GTM model memory already used by the web process. Set `REPORT_WORKER_ENABLED=false` only when another supervised worker processes the same queue and storage.
+
 | Setting | Default | Purpose |
 | --- | --- | --- |
+| `REPORT_WORKER_ENABLED` | `true` in Railway start script | Run the in-service report worker; disable only for an external worker |
 | `REPORT_STORAGE_PATH` | `instance/reports` | Private shared durable volume; never expose through a static file server |
 | `REPORT_RETENTION_HOURS` | 24 | Lifetime from request; queued and completed reports both expire |
 | `REPORT_BATCH_SIZE` | 1000 | Maximum database rows buffered per export query |
@@ -31,7 +34,7 @@ Install the updated root/backend requirements and build the frontend as usual. A
 | `REPORT_LEASE_MINUTES` | 15 | Heartbeat timeout; interrupted jobs fail and can be requested again |
 | `REPORT_PDF_FONT` | bundled Bitstream Vera | Optional readable TrueType font path with the glyphs required for your languages |
 
-The existing production validation still requires PostgreSQL, HTTPS frontend origins and shared Redis rate limiting. PostgreSQL supports concurrent workers via `FOR UPDATE SKIP LOCKED`; SQLite is for local development, with one worker. Use a process supervisor to restart workers. The worker sweeps expired jobs and abandoned leases on every loop. Deployments with separate web/worker hosts must mount the same private volume. Configure disk monitoring and sufficient space for JSON spools plus final files. Encryption at rest is a storage/deployment responsibility.
+The existing production validation still requires PostgreSQL, HTTPS frontend origins and shared Redis rate limiting. PostgreSQL supports concurrent workers via `FOR UPDATE SKIP LOCKED`; SQLite is for local development, with one worker. Use a process supervisor to restart workers. The worker sweeps expired jobs and abandoned leases on every loop. The default Railway layout keeps web and worker in one API service so local report files are immediately downloadable. Keep that API service at one replica while using local report storage. If web and worker are separated or horizontally scaled, they must use genuinely shared durable storage; otherwise a completed artifact can exist on the wrong instance. Configure disk monitoring and sufficient space for JSON spools plus final files. Encryption at rest is a storage/deployment responsibility.
 
 ## API
 
@@ -107,7 +110,7 @@ Example preview shape (sections abbreviated):
 
 ## Output, consistency and performance
 
-Reports include Claims, Customers (contact information), Products, Warranties, Reviews, Documents (metadata), Rules, Python/GTM predictions, Evaluations, Repairs and Analytics. CSV is one rectangular table with a `section` column and the union of section fields. Excel uses separate sheets with headers, full-data column width measurement (capped for readability), date cells, frozen headers, filters and conditional status colors. Long Excel text is continued in adjacent columns and sheets split at Excel's row limit. PDF uses wrapped labeled records and page numbers. Set a font with appropriate glyph coverage for non-Latin scripts.
+Staff reports include Claims, Customers (contact information), Products, Warranties, Reviews, Documents (metadata), Rules, Python/GTM predictions, Evaluations, Repairs and Analytics. Customer reports deliberately omit Reviews, Rules and raw Python/GTM prediction sections; their Evaluations section contains only the same non-technical recommendation/explanation fields exposed by the customer decision API. Internal reviewer notes, override reasons, raw rule evidence, model confidences and staff assignment IDs are never included in customer report previews or artifacts. CSV is one rectangular table with a `section` column and the union of section fields. Excel uses separate sheets with headers, full-data column width measurement (capped for readability), date cells, frozen headers, filters and conditional status colors. Long Excel text is continued in adjacent columns and sheets split at Excel's row limit. PDF uses wrapped labeled records and page numbers. Set a font with appropriate glyph coverage for non-Latin scripts.
 
 The worker reads keyset batches into disk-backed JSON spools, then writes the artifact. No entire SQL result or Excel workbook is loaded into memory. Final downloads use Flask's file wrapper. ReportLab retains PDF page metadata until finalization, so PDF memory grows with page count; use CSV/Excel for very large machine-readable datasets. A browser's Axios Blob download also occupies client memory proportional to file size; API clients may stream directly to disk.
 
