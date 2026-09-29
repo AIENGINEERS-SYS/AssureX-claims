@@ -2,6 +2,9 @@
 
 AssureX is a warranty and insurance claims application. Customers can register products and warranties, create claims, upload evidence, review OCR results, submit claims, and track their status. Reviewers and administrators get separate dashboards for claim handling, duplicate-document review, workload, and operational reporting.
 
+[https://fabulous-mercy-production-8f9a.up.railway.app/products](https://fabulous-mercy-production-8f9a.up.railway.app/products) -Frontend
+[https://assurex-claims-production.up.railway.app](https://assurex-claims-production.up.railway.app)  - Backend
+
 ## Feature status
 
 | Capability | Status |
