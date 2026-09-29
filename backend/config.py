@@ -134,8 +134,15 @@ def validate_config(app):
             raise RuntimeError(f"{name} must be between 1 and {maximum}")
     if app.config["DOCUMENT_STORAGE_BACKEND"] not in {"local", "s3"}:
         raise RuntimeError("DOCUMENT_STORAGE_BACKEND must be local or s3")
-    if app.config["DOCUMENT_STORAGE_BACKEND"] == "s3" and not app.config["S3_BUCKET"]:
-        raise RuntimeError("S3_BUCKET is required for S3 storage")
+    if app.config["DOCUMENT_STORAGE_BACKEND"] == "s3":
+        if not app.config["S3_BUCKET"]:
+            raise RuntimeError("S3_BUCKET is required for S3 storage")
+        try:
+            import boto3  # noqa: F401
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "S3 storage requires boto3; install backend/requirements-s3.txt."
+            ) from exc
     if app.config["OCR_PROVIDER"] not in {"tesseract", "disabled"}:
         raise RuntimeError("OCR_PROVIDER must be tesseract or disabled")
     for name, maximum in (("MAX_DOCUMENT_SIZE_MB", 100), ("MAX_DOCUMENTS_PER_CLAIM", 100),
