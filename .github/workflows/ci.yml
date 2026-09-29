@@ -47,6 +47,8 @@ jobs:
           pip install -r requirements.txt pytest
       - name: Compile Python
         run: python -m compileall -q backend tests
+      - name: Validate production startup script
+        run: sh -n scripts/railpack-start.sh
       - name: Apply migrations
         run: python -m flask --app backend:create_app db upgrade
       - name: PostgreSQL migration and analytics smoke test
