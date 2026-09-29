@@ -362,8 +362,19 @@
   color: var(--green);
 }
 
-.auth-panel .form-error {
+.auth-panel .form-error,
+.auth-panel .form-success {
   margin: 16px 0 0;
+}
+
+.form-success {
+  padding: 11px 13px;
+  border: 1px solid #b9d8c8;
+  border-radius: 9px;
+  background: #f0f8f3;
+  color: #245c43;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .auth-panel .auth-toggle {
