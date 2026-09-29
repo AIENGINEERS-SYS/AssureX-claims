@@ -78,6 +78,10 @@ def test_complete_product_workflow_and_mobile(browser_server):
     run_browser(browser_server,"workflow")
 
 
+def test_registration_returns_to_login_before_dashboard(browser_server):
+    run_browser(browser_server,"registration")
+
+
 def test_untrusted_product_text_is_not_executed(browser_server,app):
     from datetime import date
     from backend.db.models import Product,User
