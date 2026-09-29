@@ -63,4 +63,10 @@ def render_claim_card(payload, output_path, *, variant=0):
 def claim_card_path(claim, policy, root):
     payload = card_payload(claim, policy)
     digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:16]
-    return render_claim_card(payload, Path(root) / f"claim-{claim.id}-{digest}.png")
+    output = Path(root) / f"claim-{claim.id}-{digest}.png"
+    # The digest is derived from every field rendered on the card. If the file
+    # already exists, the claim evidence has not changed and re-rendering is
+    # wasted work on the hot GTM path.
+    if output.is_file() and output.stat().st_size > 0:
+        return output
+    return render_claim_card(payload, output)
