@@ -300,21 +300,60 @@ def test_missing_documents_is_inclusive_optional_documents_do_not_satisfy_requir
     assert "damage_evidence" in rules["missing_documents"]["evidence"]["missing_documents"]
 
 
-def test_missing_documents_never_marks_a_complete_evidence_set_as_missing(app, claims, accounts):
-    """Pins current behaviour.
-
-    The policy vocabulary uses ``damage_evidence`` while ck_documents_type only accepts
-    ``fault_evidence``, so the damage-evidence requirement can never be satisfied and the
-    rule always escalates to manual review.
-    """
+def test_missing_documents_accepts_stored_fault_evidence_as_public_damage_evidence(app, claims, accounts):
+    """Stored fault_evidence must satisfy the public damage_evidence requirement."""
     claim_id = claims["customer"]["claim"]
     attach_evidence(app, claim_id, accounts["customer"])
     rules, _ = rules_for(app, claim_id)
     rule = rules["missing_documents"]
-    assert rule["evidence"]["submitted_documents"] == ["fault_evidence", "product_image",
-                                                       "receipt", "serial_number_image"]
-    assert rule["evidence"]["missing_documents"] == ["damage_evidence"]
-    assert rule["result"] == "manual_review"
+
+    assert rule["evidence"]["submitted_documents"] == [
+        "damage_evidence",
+        "product_image",
+        "receipt",
+        "serial_number_image",
+    ]
+    assert set(rule["evidence"]["required_documents"]) == {
+        "receipt",
+        "serial_number_image",
+        "product_image",
+        "damage_evidence",
+    }
+    assert rule["evidence"]["missing_documents"] == []
+    assert rule["result"] == "passed"
+
+
+def test_missing_document_rule_canonicalizes_policy_and_storage_vocabularies(app, claims, accounts):
+    """The rule remains correct even if a policy uses the storage-side alias."""
+    from backend.services.warranty_policy import WarrantyPolicy
+
+    claim_id = claims["customer"]["claim"]
+    attach_evidence(app, claim_id, accounts["customer"])
+    with app.app_context():
+        claim = db.session.get(Claim, claim_id)
+        base = policy_for(app, claim)
+        storage_vocab_policy = WarrantyPolicy(
+            code=base.code,
+            categories=base.categories,
+            warranty_months=base.warranty_months,
+            required_documents=(
+                "receipt",
+                "serial_number_image",
+                "product_image",
+                "fault_evidence",
+            ),
+            optional_documents=base.optional_documents,
+            exclusions=base.exclusions,
+            authorized_repair_required=base.authorized_repair_required,
+            unauthorized_repair_invalidates=base.unauthorized_repair_invalidates,
+            version=base.version,
+        )
+        results, _ = ClaimRuleEngine().evaluate(claim, storage_vocab_policy)
+
+    rule = {item["rule_code"]: item for item in results}["missing_documents"]
+    assert rule["result"] == "passed"
+    assert rule["evidence"]["missing_documents"] == []
+    assert "damage_evidence" in rule["evidence"]["required_documents"]
 
 
 def test_appliances_policy_requires_fewer_documents_than_electronics(app, accounts):
