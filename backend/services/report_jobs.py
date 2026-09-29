@@ -155,7 +155,8 @@ def process_next():
                 {'metric': key, 'value': value} for key, value in sorted(statuses.items())]
             analytics += [{'metric': 'total_' + name.lower().replace(' ', '_'), 'value': spec['count']}
                           for name, spec in specs.items() if name != 'Claims']
-            outcomes = Counter(row['decision'] for row in rows(specs['Reviews']))
+            review_spec = specs.get('Reviews')
+            outcomes = Counter(row['decision'] for row in rows(review_spec)) if review_spec else Counter()
             analytics += [{'metric': f'review_{key}', 'value': value} for key, value in sorted(outcomes.items())]
             stats_path = Path(temp) / 'analytics.jsonl'
             stats_path.write_text(''.join(json.dumps(row) + '\n' for row in analytics), encoding='utf-8')
