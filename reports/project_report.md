@@ -550,7 +550,16 @@ Production deployment still requires an explicit retention/deletion policy, data
 - add model-drift and calibration monitoring;
 - add formal data-retention and privacy-management workflows.
 
-## 33. Conclusion
+## 33. Team contributions
+
+| Team member | Contribution / role |
+| --- | --- |
+| JOB BRYAN IDAMEKA | Cloud Deployment |
+| AALONEE JEPHTHAH LEDUM | ML Engineer |
+| EVAH GODSPOWER ILUO-OGHENE | Frontend / ML Engineer |
+| JOSHUA CHIDIEBUBE RAY OFFOR | Team Lead / Backend |
+
+## 34. Conclusion
 
 AssureX already implements the central competition workflow: secure intake, evidence review, dual-model prediction, confidence comparison, configurable rules, contradictions, duplicate detection, manual review, dashboards, notifications and auditability. The strongest committed model evidence is the Python classifier, which reaches 92.5% test accuracy on 360 balanced test observations.
 
