@@ -22,7 +22,7 @@ from backend.services.predictions import (
     _load_gtm,
     _load_python,
 )
-from test_auth import app, claims  # noqa: F401
+from test_auth import accounts, app, claims  # noqa: F401
 
 
 def test_claim_summary_card_is_reused_when_evidence_is_unchanged(
