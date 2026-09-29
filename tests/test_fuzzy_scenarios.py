@@ -48,12 +48,10 @@ def passing_rules():
 def test_scenario_one_valid_claim(app, claims):
     """A claim with matching confident models and every rule passing is approved.
 
-    Driven at the decision engine because the current rule set can never report
-    ``missing_documents`` as satisfied: the policy requires ``damage_evidence`` while
-    ck_documents_type only permits ``fault_evidence``.  See
-    ``test_missing_documents_never_marks_a_complete_evidence_set_as_missing`` in
-    test_fuzzy_rules.py for that defect, and ``test_a_complete_evidence_set_still_escalates``
-    below for the end-to-end consequence.
+    Driven at the decision engine because a separate OCR-container identity issue still
+    prevents this synthetic fully valid scenario from reaching approval end to end. The
+    damage_evidence/fault_evidence missing-document alias is covered independently and is
+    expected to pass for a complete evidence set.
     """
     rules = passing_rules()
     decision, explanation = DecisionEngine().decide(agreeing_models("valid", 0.9),
@@ -65,8 +63,8 @@ def test_scenario_one_valid_claim(app, claims):
     assert len(explanation["supporting_evidence"]) == 6
 
 
-def test_a_complete_evidence_set_still_escalates_end_to_end(client, app, claims, tmp_path):
-    """Pins the gap: uploading every required document cannot reach likely_valid today."""
+def test_complete_evidence_no_longer_triggers_missing_document_false_positive(client, app, claims, tmp_path):
+    """Complete evidence satisfies document requirements even if another issue escalates."""
     customer = auth(client, "customer")
     reviewer = auth(client, "reviewer")
     app.config["GTM_PREDICTOR"] = lambda path: [0.80, 0.10, 0.10]
@@ -82,11 +80,11 @@ def test_a_complete_evidence_set_still_escalates_end_to_end(client, app, claims,
     assert body["status"] == "complete"
     assert body["recommendation"] == "manual_review_required"
     problems = {p["code"]: p for p in body["explanation"]["problems"]}
-    # The damage-evidence naming gap is always present; OCR containers additionally make
-    # the serial and contradiction rules fail once the documents carry extracted data.
-    assert problems["missing_documents"]["severity"] == "medium"
-    assert set(problems) >= {"missing_documents", "serial_number_verification",
-                             "contradiction_detection"}
+    # The alias bug is fixed: the stored fault_evidence upload satisfies the public
+    # damage_evidence policy requirement. A separate OCR-container identity issue still
+    # causes serial/contradiction escalation in this fixture.
+    assert "missing_documents" not in problems
+    assert set(problems) >= {"serial_number_verification", "contradiction_detection"}
     with app.app_context():
         assert db.session.get(Claim, claim_id).status == "manual_review"
 

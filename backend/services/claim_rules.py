@@ -3,6 +3,8 @@ import calendar
 import re
 from datetime import date
 
+from backend.services.document_service import public_document_type
+
 
 def normalized(value):
     return re.sub(r"[^a-z0-9]", "", str(value or "").casefold())
@@ -28,7 +30,19 @@ def parsed_date(value):
 class ClaimRuleEngine:
     def evaluate(self, claim, policy):
         documents = list(claim.documents)
-        document_types = sorted({d.document_type for d in documents})
+        # Database storage uses "fault_evidence" while the public/API policy
+        # vocabulary uses "damage_evidence". Canonicalize before comparing
+        # against policy requirements so valid uploads are not falsely marked
+        # missing.
+        document_types = sorted({
+            public_document_type(d.document_type) for d in documents
+        })
+        required_documents = tuple(
+            dict.fromkeys(public_document_type(kind) for kind in policy.required_documents)
+        )
+        optional_documents = tuple(
+            dict.fromkeys(public_document_type(kind) for kind in policy.optional_documents)
+        )
         evidence = self._document_evidence(documents)
         results = []
 
@@ -89,12 +103,12 @@ class ClaimRuleEngine:
             f"Found {len(contradictions)} material contradiction(s)." if contradictions else
             "No material contradictions were found.", {"findings": contradictions}))
 
-        missing = sorted(set(policy.required_documents) - set(document_types))
+        missing = sorted(set(required_documents) - set(document_types))
         results.append(self._result("missing_documents", "Required documents", "evidence",
             "manual_review" if missing else "passed", "medium" if missing else "info",
             "Mandatory evidence is missing." if missing else "All mandatory evidence is available.",
-            {"required_documents": list(policy.required_documents), "submitted_documents": document_types,
-             "missing_documents": missing, "optional_documents": list(policy.optional_documents)}))
+            {"required_documents": list(required_documents), "submitted_documents": document_types,
+             "missing_documents": missing, "optional_documents": list(optional_documents)}))
 
         repairs = list(claim.repairs)
         if not repairs:
