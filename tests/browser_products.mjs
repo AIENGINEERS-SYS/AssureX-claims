@@ -84,6 +84,25 @@ try {
   } else if (scenario === "claims") {
     const {runClaims} = await import('./browser_claims.mjs');
     await runClaims({baseURL,call,click,fill,wait,has,evaluate,screenshot,pause});
+  } else if (scenario === "registration") {
+    await call("Page.navigate",{url:baseURL+"/products"});
+    await click('.auth-mode-switch button:nth-child(2)');
+    await wait(has("h1","Create your account"));
+    await fill('#auth-form [name="full_name"]',"New Customer");
+    await fill('#auth-form [name="email"]',"new.customer@example.com");
+    await fill('#auth-form [name="password"]',process.env.ASSUREX_TEST_PASSWORD);
+    await fill('#auth-form [name="confirm_password"]',process.env.ASSUREX_TEST_PASSWORD);
+    await click("#auth-submit");
+
+    await wait(has("h1","Sign in to AssureX"));
+    assert.ok(await evaluate(has('[role="status"]',"Account created successfully. Sign in to continue.")));
+    assert.equal(await evaluate('document.querySelector(".products-shell") === null'),true,
+      "Registration must not create a signed-in dashboard session");
+
+    await fill('#auth-form [name="email"]',"new.customer@example.com");
+    await fill('#auth-form [name="password"]',process.env.ASSUREX_TEST_PASSWORD);
+    await click("#auth-submit");
+    await wait(has("h1","Products & warranties"));
   } else {
   await call("Page.navigate",{url:baseURL+"/products"});
   await fill('#auth-form [name="email"]',"customer@example.com");
