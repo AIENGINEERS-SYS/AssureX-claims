@@ -265,7 +265,7 @@ def test_gtm_accuracy_on_30_shared_unseen_claims(app, tmp_path):
     wanted = {row["claim_id"] for row in python_rows}
     with dataset_path.open("r", encoding="utf-8-sig", newline="") as stream:
         reader = csv.DictReader(stream)
-        label_column = next((name for name in LABEL_COLUMNS if name in reader.fieldnames), None)
+        label_column = next((name for name in (*LABEL_COLUMNS, "claim_class") if name in reader.fieldnames), None)
         assert label_column is not None
         dataset_rows = {row["claim_id"]: row for row in reader if row.get("claim_id") in wanted}
 
