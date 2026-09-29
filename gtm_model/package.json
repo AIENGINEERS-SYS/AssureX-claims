@@ -1,0 +1,12 @@
+{
+  "name": "assurex-gtm-evaluator",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "evaluate:validation": "node evaluate_gtm.mjs --dataset ../dataset_generator/gtm_dataset/validation",
+    "evaluate:test": "node evaluate_gtm.mjs --dataset ../dataset_generator/gtm_dataset/test"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs-node": "^4.22.0"
+  }
+}
