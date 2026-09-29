@@ -1,8 +1,9 @@
 """Prediction, combined evaluation and decision retrieval APIs."""
+from time import monotonic
 from flask import Blueprint, current_app
 from flask_jwt_extended import current_user
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 from werkzeug.exceptions import Conflict, NotFound, ServiceUnavailable
 from backend.db.models import Claim, Document, Product
 from backend.extensions import db, limiter
@@ -18,7 +19,7 @@ bp = Blueprint("predictions", __name__, url_prefix="/api")
 
 def _loaded_claim(claim_id):
     query = select(Claim).where(Claim.id == claim_id, Claim.status != "draft").options(
-        selectinload(Claim.product), selectinload(Claim.warranty), selectinload(Claim.documents),
+        joinedload(Claim.product), joinedload(Claim.warranty), selectinload(Claim.documents),
         selectinload(Claim.repairs))
     if current_user.role == "employee":
         query = query.where(Claim.assigned_employee_id == current_user.id)
@@ -34,6 +35,7 @@ def _loaded_claim(claim_id):
 
 
 def _run_single(kind):
+    started = monotonic()
     claim_id = body(ClaimIdSchema())["claim_id"]
     claim = _loaded_claim(claim_id)
     policy, warning = policy_for_claim(claim)
@@ -48,6 +50,14 @@ def _run_single(kind):
     db.session.commit()
     if warning:
         result["policy_warning"] = warning
+    total_ms = round((monotonic() - started) * 1000)
+    target_ms = current_app.config["MODEL_PERFORMANCE_TARGET_MS"]
+    result["total_duration_ms"] = total_ms
+    result["performance_target_ms"] = target_ms
+    result["within_performance_target"] = total_ms <= target_ms
+    log = current_app.logger.info if total_ms <= target_ms else current_app.logger.warning
+    log("prediction_complete model=%s claim_id=%s total_ms=%s target_ms=%s",
+        kind, claim.id, total_ms, target_ms)
     return result, 201
 
 
@@ -69,12 +79,21 @@ def gtm_prediction():
 @role_required("employee", "reviewer")
 @limiter.limit("10 per minute")
 def evaluate(claim_id):
+    started = monotonic()
     claim = _loaded_claim(claim_id)
     item, rules, policy = ClaimEvaluationService().evaluate(claim)
     audit("claim.evaluate", item, new={"status": item.status, "recommendation": item.recommendation},
           claim_id=claim.id)
     db.session.commit()
-    return {"evaluation": evaluation_json(item), "policy": policy.as_dict(), "rules": rules}, 201
+    total_ms = round((monotonic() - started) * 1000)
+    target_ms = current_app.config["MODEL_PERFORMANCE_TARGET_MS"]
+    performance = {"total_duration_ms": total_ms, "target_ms": target_ms,
+                   "within_target": total_ms <= target_ms}
+    log = current_app.logger.info if total_ms <= target_ms else current_app.logger.warning
+    log("claim_evaluation_complete claim_id=%s total_ms=%s target_ms=%s",
+        claim.id, total_ms, target_ms)
+    return {"evaluation": evaluation_json(item), "policy": policy.as_dict(), "rules": rules,
+            "performance": performance}, 201
 
 
 @bp.get("/claims/<int:claim_id>/decision")
