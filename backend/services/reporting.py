@@ -198,25 +198,42 @@ def sections(user, filters):
     if {'status', 'date_from', 'date_to', 'reviewer_id', 'search', 'product_id', 'customer_id'} & filters.keys() or filters['dataset'] != 'claims':
         products = products.where(or_(Product.id.in_(select(Claim.product_id).where(Claim.id.in_(claims))),
             Product.id.in_(select(Warranty.product_id).where(Warranty.id.in_(warranties)))))
+    claim_fields = ('id claim_id user_id product_id warranty_id status submission_date fault_date fault_type '
+        'fault_description damage_type repair_history previous_replacement final_decision submitted_at closed_at created_at')
+    if user.role != 'customer':
+        claim_fields = claim_fields.replace(' status ', ' assigned_employee_id assigned_reviewer_id status ')
+        claim_fields = claim_fields.replace(' submitted_at ', ' manual_review_required submitted_at ')
+
     result = {
-        'Claims': section(Claim, 'id claim_id user_id product_id warranty_id assigned_employee_id assigned_reviewer_id status submission_date fault_date fault_type fault_description damage_type repair_history previous_replacement final_decision manual_review_required submitted_at closed_at created_at', Claim.id.in_(claims), 'claim'),
+        'Claims': section(Claim, claim_fields, Claim.id.in_(claims), 'claim'),
         'Products': section(Product, 'id product_id name category brand model_number serial_number purchase_date purchase_price retailer is_active', Product.id.in_(products), 'product'),
         'Customers': section(User, 'id user_id full_name email phone', or_(
             User.id.in_(select(Claim.user_id).where(Claim.id.in_(claims))),
             User.id.in_(select(Product.user_id).where(Product.id.in_(products))))),
         'Warranties': section(Warranty, 'id warranty_id product_id provider warranty_type start_date expiry_date coverage_duration_months coverage_conditions exclusions extended_warranty service_center_requirements', Warranty.id.in_(warranties), 'warranty'),
-        'Reviews': section(Review, 'id review_id claim_id reviewer_user_id decision comments override_applied override_reason reviewed_at', Review.claim_id.in_(claims)),
         'Documents': section(Document, 'id document_id claim_id product_id warranty_id document_type original_filename mime_type file_size ocr_status review_status created_at',
             or_(Document.claim_id.in_(claims), Document.claim_id.is_(None) & or_(
                 Document.product_id.in_(products), Document.warranty_id.in_(warranties)))),
-        'Rules': section(RuleResult, 'id claim_id rule_name rule_code rule_category result severity details policy_version created_at', RuleResult.claim_id.in_(claims)),
-        'Python predictions': section(PythonPrediction, 'id claim_id model_version_id predicted_class confidence_valid confidence_invalid confidence_manual_review top_confidence created_at', PythonPrediction.claim_id.in_(claims)),
-        'GTM predictions': section(GTMPrediction, 'id claim_id model_version_id predicted_class confidence_valid confidence_invalid confidence_manual_review top_confidence created_at', GTMPrediction.claim_id.in_(claims)),
-        'Evaluations': section(EvaluationResult, 'id evaluation_id claim_id status recommendation explanation policy_code policy_version created_at', EvaluationResult.claim_id.in_(claims)),
         'Repairs': section(RepairHistory, 'id product_id claim_id repair_date service_center_name authorized_service_center parts_replaced repair_outcome repair_cost notes',
             or_(RepairHistory.claim_id.in_(claims), (RepairHistory.claim_id.is_(None) & RepairHistory.product_id.in_(products))
                 if user.role in {'admin', 'customer'} else false())),
     }
+
+    if user.role == 'customer':
+        # Match the customer decision API: expose the non-technical recommendation and
+        # explanation, but never reviewer notes, override reasons, raw rule evidence,
+        # model confidences or staff assignment identifiers.
+        result['Evaluations'] = section(EvaluationResult,
+            'id evaluation_id claim_id status recommendation explanation created_at',
+            EvaluationResult.claim_id.in_(claims))
+    else:
+        result.update({
+            'Reviews': section(Review, 'id review_id claim_id reviewer_user_id decision comments override_applied override_reason reviewed_at', Review.claim_id.in_(claims)),
+            'Rules': section(RuleResult, 'id claim_id rule_name rule_code rule_category result severity details policy_version created_at', RuleResult.claim_id.in_(claims)),
+            'Python predictions': section(PythonPrediction, 'id claim_id model_version_id predicted_class confidence_valid confidence_invalid confidence_manual_review top_confidence created_at', PythonPrediction.claim_id.in_(claims)),
+            'GTM predictions': section(GTMPrediction, 'id claim_id model_version_id predicted_class confidence_valid confidence_invalid confidence_manual_review top_confidence created_at', GTMPrediction.claim_id.in_(claims)),
+            'Evaluations': section(EvaluationResult, 'id evaluation_id claim_id status recommendation explanation policy_code policy_version created_at', EvaluationResult.claim_id.in_(claims)),
+        })
     return result
 
 
