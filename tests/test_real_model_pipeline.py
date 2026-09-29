@@ -226,3 +226,120 @@ def test_comparison_engine_srs_statuses(
     assert comparison["confidence_difference"] == pytest.approx(
         round(abs(python_conf - gtm_conf), 6), abs=1e-6
     )
+
+def test_gtm_accuracy_on_30_shared_unseen_claims(app, tmp_path):
+    """Evaluate GTM on 30 claim IDs already designated as held-out Python test records.
+
+    The SRS requires the same underlying claim records to be used for both model
+    representations. This test therefore joins the committed Python held-out evidence
+    back to the structured dataset, renders the corresponding cards, and evaluates the
+    real GTM artifact.
+    """
+    import csv
+    import numpy as np
+    from PIL import Image
+
+    from backend.services.model_comparison import ModelComparisonService
+    from backend.services.predictions import (
+        _artifact_version,
+        _gtm_labels,
+        _load_gtm,
+        normalized_result,
+    )
+    from dataset_generator.claim_card_generator import (
+        LABEL_COLUMNS,
+        canonical_label as dataset_label,
+        payload,
+        render_claim_card,
+    )
+
+    root = Path(__file__).resolve().parents[1]
+    python_evidence_path = root / "notebooks" / "sample_test_predictions_with_confidence.csv"
+    dataset_path = root / "data" / "assurex_nigeria_warranty_claims_v2.csv"
+    gtm_path = Path(app.config["GTM_MODEL_PATH"])
+
+    with python_evidence_path.open("r", encoding="utf-8-sig", newline="") as stream:
+        python_rows = list(csv.DictReader(stream))[:30]
+    assert len(python_rows) == 30
+
+    wanted = {row["claim_id"] for row in python_rows}
+    with dataset_path.open("r", encoding="utf-8-sig", newline="") as stream:
+        reader = csv.DictReader(stream)
+        label_column = next((name for name in LABEL_COLUMNS if name in reader.fieldnames), None)
+        assert label_column is not None
+        dataset_rows = {row["claim_id"]: row for row in reader if row.get("claim_id") in wanted}
+
+    assert set(dataset_rows) == wanted
+
+    images = []
+    actual = []
+    ordered_rows = []
+    for index, python_row in enumerate(python_rows):
+        row = dataset_rows[python_row["claim_id"]]
+        actual_label = dataset_label(row[label_column])
+        assert actual_label == dataset_label(python_row["claim_class"])
+        card = render_claim_card(payload(row, index), tmp_path / f"{python_row['claim_id']}.png")
+        with Image.open(card) as image:
+            array = np.asarray(image.convert("RGB"), dtype="float32")
+        images.append((array / 127.5) - 1.0)
+        actual.append(actual_label)
+        ordered_rows.append((python_row, row))
+
+    version = _artifact_version(gtm_path)
+    gtm_model = _load_gtm(str(gtm_path.resolve()), version)
+    raw_predictions = gtm_model.predict(np.stack(images, axis=0), verbose=0)
+    labels = _gtm_labels(gtm_path)
+    assert len(raw_predictions) == 30
+
+    gtm_results = [
+        normalized_result("gtm", version, labels, probabilities, 0)
+        for probabilities in raw_predictions
+    ]
+
+    gtm_correct = sum(
+        result["prediction_class"] == expected
+        for result, expected in zip(gtm_results, actual)
+    )
+    gtm_accuracy = gtm_correct / len(actual)
+
+    python_correct = sum(
+        dataset_label(row["predicted_class"]) == dataset_label(row["claim_class"])
+        for row in python_rows
+    )
+    python_accuracy = python_correct / len(python_rows)
+
+    # The PDF sets an >=85% unseen-test accuracy target for both independent models.
+    assert python_accuracy >= 0.85, (
+        f"Python 30-claim held-out accuracy {python_accuracy:.3f} is below the SRS 0.85 target"
+    )
+    assert gtm_accuracy >= 0.85, (
+        f"GTM 30-claim held-out accuracy {gtm_accuracy:.3f} "
+        f"({gtm_correct}/30) is below the SRS 0.85 target"
+    )
+
+    # Also run the comparison engine over the same 30 paired claims.
+    with app.app_context():
+        for python_row, gtm_result in zip(python_rows, gtm_results):
+            py_scores = {
+                "valid": float(python_row["confidence_Likely Valid"]),
+                "invalid": float(python_row["confidence_Likely Invalid"]),
+                "manual_review": float(python_row["confidence_Manual Review Required"]),
+            }
+            py_class = dataset_label(python_row["predicted_class"])
+            py_result = {
+                "prediction_class": py_class,
+                "confidence": py_scores,
+                "top_confidence": max(py_scores.values()),
+            }
+            comparison = ModelComparisonService().compare(py_result, gtm_result)
+            expected_gap = round(
+                abs(py_result["top_confidence"] - gtm_result["top_confidence"]), 6
+            )
+            assert comparison["confidence_difference"] == pytest.approx(expected_gap, abs=1e-6)
+            assert comparison["status"] in {
+                "Strong Match",
+                "Acceptable Match",
+                "Weak Match",
+                "Model Disagreement",
+                "Uncertain Result",
+            }
