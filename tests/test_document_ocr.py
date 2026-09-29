@@ -14,6 +14,11 @@ from test_auth import app, client, accounts, claims, bearer, login
 from test_claim_submission import complete, draft, submit
 
 
+def test_s3_runtime_dependency_is_installed():
+    import boto3
+    assert boto3.__version__
+
+
 def image_bytes(fmt="PNG", color="navy"):
     stream = BytesIO()
     Image.new("RGB", (24, 16), color).save(stream, format=fmt)
