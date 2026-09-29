@@ -75,7 +75,8 @@ def status(claim_id):
     previous = claim.status
     claim.status = data["status"]
     claim.manual_review_required = claim.status == "manual_review"
-    audit("claim.status", claim, old={"status": previous}, new=data, claim_id=claim.id)
+    audit("claim.status_changed", claim, old={"status": previous},
+          new={**data, "source": "employee"}, claim_id=claim.id)
     if claim.status == "manual_review":
         NotificationService().send_review_notification(claim)
     elif claim.status == "additional_information_required":

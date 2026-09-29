@@ -112,7 +112,10 @@ def test_invalid_json_shape(client, payload):
 
 
 def test_login_and_jwt_claims(client, app, accounts):
-    result = login(client)
+    response = client.post("/api/auth/login", json={"email": "customer@example.com", "password": PASSWORD},
+                           headers={"User-Agent": "AssureX-Audit-Test/1.0"})
+    assert response.status_code == 200, response.json
+    result = response.json
     with app.app_context():
         token = decode_token(result["access_token"])
         refresh = decode_token(result["refresh_token"])
@@ -121,6 +124,11 @@ def test_login_and_jwt_claims(client, app, accounts):
     assert token["exp"] > token["iat"] and token["sid"] == refresh["sid"]
     response = client.get("/api/auth/me", headers=bearer(result["access_token"]))
     assert response.status_code == 200 and response.headers["Cache-Control"] == "no-store"
+    with app.app_context():
+        event = db.session.scalar(select(AuditLog).where(AuditLog.action == "auth.login"))
+        assert event.user_id == accounts["customer"]
+        assert event.ip_address == "127.0.0.1"
+        assert event.user_agent == "AssureX-Audit-Test/1.0"
 
 
 def test_invalid_login_is_generic(client, app, accounts):

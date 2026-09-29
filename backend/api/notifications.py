@@ -69,6 +69,8 @@ def _owned(notification_id: int, *, lock: bool = False) -> Notification:
 
 
 def _audit(action: str, entity_id: str, *, old=None, new=None, claim_id=None):
+    from .common import request_audit_context
+
     db.session.add(AuditLog(
         user_id=current_user.id,
         claim_id=claim_id,
@@ -77,7 +79,7 @@ def _audit(action: str, entity_id: str, *, old=None, new=None, claim_id=None):
         entity_id=entity_id,
         old_values=old,
         new_values=new,
-        ip_address=request.remote_addr,
+        **request_audit_context(),
     ))
 
 

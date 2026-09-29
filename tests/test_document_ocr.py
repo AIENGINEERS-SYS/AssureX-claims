@@ -185,6 +185,9 @@ def test_ocr_review_preserves_original_and_correction_audit(client, app, headers
     with app.app_context():
         actions = set(db.session.scalars(select(AuditLog.action)).all())
         assert {"document_uploaded", "ocr_started", "ocr_completed", "ocr_reviewed", "ocr_corrected"} <= actions
+        correction_event = db.session.scalar(select(AuditLog).where(AuditLog.action == "ocr_corrected"))
+        assert correction_event.old_values["serial_number"] == "SN78299I04"
+        assert correction_event.new_values["serial_number"] == "SN78299104"
 
 
 def test_owner_and_staff_document_authorization(client, app, headers, claims, ocr):

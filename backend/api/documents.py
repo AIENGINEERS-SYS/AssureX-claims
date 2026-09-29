@@ -189,7 +189,15 @@ def review_ocr(document_id):
     corrected = review_document(document, data, current_user.id)
     audit("ocr_reviewed", document, new={"corrected": corrected}, claim_id=claim.id)
     if corrected:
-        audit("ocr_corrected", document, new={"fields": sorted(data)}, claim_id=claim.id)
+        changes = {
+            field: {"ocr_value": value.get("ocr_value"), "confirmed_value": value.get("confirmed_value")}
+            for field, value in (document.verified_data or {}).items()
+            if value.get("was_corrected")
+        }
+        # The extracted OCR result remains on the document; this event records
+        # the exact human correction that produced the verified value.
+        audit("ocr_corrected", document, old={field: item["ocr_value"] for field, item in changes.items()},
+              new={field: item["confirmed_value"] for field, item in changes.items()}, claim_id=claim.id)
     db.session.commit()
     return {"document": document_json(document, include_text=True), "claim": workflow_json(claim)}
 

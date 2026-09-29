@@ -473,7 +473,8 @@ def test_reviewer_can_resolve_a_manual_review_scenario(client, app, claims, tmp_
     history = client.get(f"/api/review/{claim_id}/audit-history", headers=reviewer)
     assert history.status_code == 200
     assert [entry["decision"] for entry in history.json["reviews"]] == ["reject"]
-    assert [entry["action"] for entry in history.json["audit"]][:1] == ["review.override"]
+    assert {entry["action"] for entry in history.json["audit"]} >= {
+        "review.recorded", "review.override", "claim.status_changed", "claim.final_decision"}
 
 
 def test_evaluation_rows_and_decision_are_persisted_per_claim(app, client, claims, tmp_path):

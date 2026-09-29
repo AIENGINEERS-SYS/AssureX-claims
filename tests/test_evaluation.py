@@ -2,7 +2,8 @@
 from datetime import date, timedelta
 from decimal import Decimal
 import pytest
-from backend.db.models import Claim, EvaluationResult, Review
+from sqlalchemy import select
+from backend.db.models import AuditLog, Claim, EvaluationResult, Review
 from backend.extensions import db
 from backend.services.claim_rules import ClaimRuleEngine
 from backend.services.decision_engine import DecisionEngine
@@ -105,6 +106,22 @@ def test_real_python_and_injected_gtm_prediction_routes(client, app, claims):
                                json={"claim_id": claims["customer"]["claim"]})
     assert gtm_response.status_code == 201, gtm_response.json
     assert gtm_response.json["prediction_class"] == "valid"
+
+
+def test_combined_evaluation_records_predictions_rules_and_status(client, app, claims, tmp_path):
+    app.config["GTM_PREDICTOR"] = lambda path: [.85, .10, .05]
+    app.config["MODEL_CARD_PATH"] = str(tmp_path / "cards")
+    claim_id = claims["customer"]["claim"]
+    response = client.post(f"/api/claims/{claim_id}/evaluate", headers=auth(client, "reviewer"))
+    assert response.status_code == 201, response.json
+    with app.app_context():
+        events = db.session.scalars(select(AuditLog).where(AuditLog.claim_id == claim_id)).all()
+        actions = {event.action for event in events}
+        assert {"prediction.python", "prediction.gtm", "rule.executed", "claim.evaluate",
+                "claim.status_changed"} <= actions
+        rule_event = next(event for event in events if event.action == "rule.executed")
+        assert rule_event.new_values["policy_code"] == "electronics"
+        assert rule_event.new_values["rule_count"] > 0
 
 
 def test_override_requires_explicit_reason_and_preserves_machine_recommendation(client, app, claims):

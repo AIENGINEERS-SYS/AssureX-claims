@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 import pytest
 from sqlalchemy import select
-from backend.db.models import Claim, Product, Warranty
+from backend.db.models import AuditLog, Claim, Product, Warranty
 from backend.extensions import db
 from backend.services import warranty_calculations as calc
 from test_auth import app, client, accounts, bearer, login
@@ -103,6 +103,9 @@ def test_successful_registration_and_calculations(client,app,headers):
     assert any(event["kind"] == "today" for event in product["timeline"])
     with app.app_context():
         assert db.session.scalar(select(Product)).warranties[0].expiry_date == date(2027,1,1)
+        event = db.session.scalar(select(AuditLog).where(AuditLog.action == "product.create"))
+        assert event.entity_type == "products" and event.user_id is not None
+        assert event.new_values["warranty_id"] == product["warranties"][0]["id"]
 
 
 @pytest.mark.parametrize("field", ["name","brand","category","model_number","serial_number","purchase_date",

@@ -52,22 +52,37 @@ def record(claim_id, decision, data=None, *, explicit_override=False):
     differs = bool(human_decision and previous and human_decision != previous)
     if differs and not explicit_override:
         raise Conflict("This action differs from the automated recommendation. Use the override action and provide a reason.")
+    previous_status = claim.status
     if decision in {"approve", "reject"}:
         claim.status = "approved" if decision == "approve" else "rejected"
         claim.final_decision = human_decision
         claim.manual_review_required = False
-    db.session.add(Review(claim_id=claim.id, reviewer_user_id=current_user.id,
-                           decision=decision, comments=data["notes"], previous_decision=previous,
-                           override_applied=explicit_override,
-                           override_reason=data.get("override_reason") if explicit_override else None))
+    review = Review(claim_id=claim.id, reviewer_user_id=current_user.id,
+                    decision=decision, comments=data["notes"], previous_decision=previous,
+                    override_applied=explicit_override,
+                    override_reason=data.get("override_reason") if explicit_override else None)
+    db.session.add(review)
+    db.session.flush()
     if decision == "approve":
         NotificationService().send_claim_approved(claim)
     elif decision == "reject":
         NotificationService().send_claim_rejected(claim, data.get("rejection_reason"))
-    audit("review.override" if explicit_override else "review." + decision, claim,
-          old={"automated_recommendation": previous},
-          new={"status": claim.status, "human_decision": human_decision,
-               "override_reason": data.get("override_reason") if explicit_override else None}, claim_id=claim.id)
+    audit("review.recorded", review, new={
+        "decision": decision,
+        "has_comments": bool(data["notes"]),
+        "automated_recommendation": previous,
+    }, claim_id=claim.id)
+    if explicit_override:
+        audit("review.override", review, old={"automated_recommendation": previous},
+              new={"human_decision": human_decision, "reason": data.get("override_reason")},
+              claim_id=claim.id)
+    if claim.status != previous_status:
+        audit("claim.status_changed", claim, old={"status": previous_status},
+              new={"status": claim.status, "source": "review"}, claim_id=claim.id)
+    if decision in {"approve", "reject"}:
+        audit("claim.final_decision", claim, old={"automated_recommendation": previous},
+              new={"decision": human_decision, "status": claim.status,
+                   "overridden": explicit_override}, claim_id=claim.id)
     db.session.commit()
     return {"claim": claim_json(claim)}
 

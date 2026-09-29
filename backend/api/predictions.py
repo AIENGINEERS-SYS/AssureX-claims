@@ -46,7 +46,12 @@ def _run_single(kind):
         current_app.logger.error("%s inference endpoint failed for claim_id=%s (%s)",
                                  kind, claim.id, type(exc.__cause__ or exc).__name__)
         raise ServiceUnavailable(f"{kind.upper()} prediction is temporarily unavailable.") from exc
-    audit(f"prediction.{kind}", record, new={"prediction_class": result["prediction_class"]}, claim_id=claim.id)
+    audit(f"prediction.{kind}", record, new={
+        "prediction_class": result["prediction_class"],
+        "confidence": result["confidence"],
+        "model_version": result["model_version"],
+        "inference_duration_ms": result.get("inference_duration_ms"),
+    }, claim_id=claim.id)
     db.session.commit()
     if warning:
         result["policy_warning"] = warning
@@ -81,9 +86,34 @@ def gtm_prediction():
 def evaluate(claim_id):
     started = monotonic()
     claim = _loaded_claim(claim_id)
+    previous_status = claim.status
     item, rules, policy = ClaimEvaluationService().evaluate(claim)
+    # Link the invoking user to immutable inference records created by the
+    # combined evaluation, without duplicating raw OCR/document evidence.
+    for kind, record in (("python", item.python_prediction), ("gtm", item.gtm_prediction)):
+        if record is not None:
+            audit(f"prediction.{kind}", record, new={
+                "prediction_class": record.predicted_class,
+                "confidence": {
+                    "valid": record.confidence_valid,
+                    "invalid": record.confidence_invalid,
+                    "manual_review": record.confidence_manual_review,
+                },
+                "model_version": record.model_version.version,
+                "inference_duration_ms": record.inference_duration_ms,
+                "source": "claim_evaluation",
+            }, claim_id=claim.id)
+    audit("rule.executed", item, new={
+        "policy_code": policy.code,
+        "policy_version": policy.version,
+        "rule_count": len(rules),
+        "results": {rule["rule_code"]: rule["result"] for rule in rules},
+    }, claim_id=claim.id)
     audit("claim.evaluate", item, new={"status": item.status, "recommendation": item.recommendation},
           claim_id=claim.id)
+    if claim.status != previous_status:
+        audit("claim.status_changed", claim, old={"status": previous_status},
+              new={"status": claim.status, "source": "claim_evaluation"}, claim_id=claim.id)
     db.session.commit()
     total_ms = round((monotonic() - started) * 1000)
     target_ms = current_app.config["MODEL_PERFORMANCE_TARGET_MS"]
