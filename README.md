@@ -362,6 +362,15 @@ Set `ASSUREX_BROWSER_PATH` when Chrome or Edge is not installed in a location de
 - [Database design](documentation/database.md)
 - [Railway deployment](documentation/railway-deployment.md)
 
+## Team contributions
+
+| Team member | Contribution / role |
+| --- | --- |
+| JOB BRYAN IDAMEKA | Cloud Deployment |
+| AALONEE JEPHTHAH LEDUM | ML Engineer |
+| EVAH GODSPOWER ILUO-OGHENE | Frontend / ML Engineer |
+| JOSHUA CHIDIEBUBE RAY OFFOR | Team Lead / Backend |
+
 ## Blog Post
 https://medium.com/@xavenordu/building-assurex-claim-engine-an-ai-assisted-warranty-claim-management-system-656fce987a0e
 
