@@ -14,6 +14,7 @@ AssureX is a warranty and insurance claims application. Customers can register p
 | Google Teachable Machine prediction generation | Implemented |
 | Warranty-rule, contradiction, and decision generation | Implemented |
 | Private Claim Summary Card generation | Implemented |
+| Interactive OpenAPI / Swagger API documentation | Implemented |
 | PDF or CSV claim-report export | Not implemented |
 
 Model operation and deployment details are documented in `documentation/model-evaluation.md`.
@@ -69,6 +70,8 @@ npm --prefix frontend run dev -- --host 127.0.0.1
 ```
 
 Open `http://127.0.0.1:5173`. Confirm the API is available at `http://127.0.0.1:8000/api/health`; it should return `{"status":"ok"}`.
+
+Interactive API documentation is available at `http://127.0.0.1:8000/docs`, with the machine-readable OpenAPI document at `http://127.0.0.1:8000/openapi.json`. Protected endpoints use JWT Bearer authentication: log in through the documented auth endpoint, copy the access token, and use Swagger UI's **Authorize** control.
 
 For a local production-style API process, export the values from `.env` into the process environment before starting Waitress. Waitress does not load `.env` automatically:
 

@@ -55,6 +55,9 @@ def create_app(config=None):
                       dashboard.bp, predictions.bp, notifications.bp):
         app.register_blueprint(blueprint)
 
+    from .docs import init_api_docs
+    init_api_docs(app)
+
     if app.config["MODEL_PRELOAD_ENABLED"]:
         from .services.predictions import preload_models
         try:
