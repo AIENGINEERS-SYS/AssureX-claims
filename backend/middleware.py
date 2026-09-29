@@ -61,7 +61,18 @@ def init_middleware(app):
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        if request.path in {"/docs", "/docs/"}:
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "img-src 'self' data:; "
+                "font-src 'self' data: https://cdn.jsdelivr.net; "
+                "connect-src 'self'; "
+                "frame-ancestors 'none'"
+            )
+        else:
+            response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
         origin = allowed_origin() if request.path.startswith("/api/") else None
         if origin:
             response.headers["Access-Control-Allow-Origin"] = origin
