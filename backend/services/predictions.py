@@ -199,9 +199,12 @@ def _load_gtm_labels(metadata_path, artifact_version):
 
 def _gtm_labels(model_path, artifact_version=None):
     model_path = Path(model_path)
-    version = artifact_version or _artifact_version(model_path)
     metadata = model_path.with_name("metadata.json")
-    return _load_gtm_labels(str(metadata.resolve()), version)
+    try:
+        cache_version = artifact_version or f"metadata-{metadata.stat().st_mtime_ns}"
+    except OSError as exc:
+        raise PredictionError("GTM metadata is unavailable or invalid.") from exc
+    return list(_load_gtm_labels(str(metadata.resolve()), cache_version))
 
 
 def preload_models(app):
