@@ -225,3 +225,4 @@ node_modules/
 frontend/dist/
 frontend/static/claims/
 frontend/static/dashboard/
+instance/reports/

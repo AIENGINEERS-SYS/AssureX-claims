@@ -2,6 +2,7 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useParams} from 'react-router-dom';
 import {Box, Check, CheckCircle2, ChevronLeft, ChevronRight, Eye, EyeOff, LockKeyhole, LogIn, LogOut, Mail, PackagePlus, Pencil, Plus, ShieldCheck, Trash2, UserRound} from 'lucide-react';
 import {api, errorMessage, getSession, setSession} from '../claims/api';
+import {GlobalSearchBar} from '../search/SearchApp';
 import './products.css';
 
 const productFields = ['name', 'brand', 'category', 'model_number', 'serial_number', 'purchase_date', 'purchase_price', 'retailer'];
@@ -248,11 +249,13 @@ function Layout({user, onSignOut}) {
       <p className="nav-caption">YOUR WORKSPACE</p>
       <nav><Link className="nav-item current" to="/" aria-current="page"><Box size={19} /> Products & warranties</Link></nav>
       <a className="nav-item secondary-nav" href="/claims"><ShieldCheck size={19} /> Claims</a>
+      <a className="nav-item secondary-nav" href="/reports">Reports</a>
+      <a className="nav-item secondary-nav" href="/search?scope=products">Advanced search</a>
       <div className="sidebar-note"><span className="shield" aria-hidden="true"><Check size={20} /></span><strong>A little more peace of mind.</strong><p>Your products. Your cover.<br />Everything in one place.</p></div>
       <div className="sidebar-footer">ASSUREX <span>Claims made clear.</span></div>
     </aside>
     <div className="workspace"><header className="topbar"><span className="breadcrumb">Workspace <span>/</span> <strong>Products & warranties</strong></span>
-      <div className="account"><span>{user.full_name}</span><button id="sign-out" className="button small secondary" onClick={onSignOut}><LogOut size={15} />Sign out</button></div></header>
+      <GlobalSearchBar/><div className="account"><span>{user.full_name}</span><button id="sign-out" className="button small secondary" onClick={onSignOut}><LogOut size={15} />Sign out</button></div></header>
       <main id="main" tabIndex="-1"><Routes>
         <Route path="/" element={<ProductList user={user} />} />
         <Route path="/new" element={<ProductForm />} />

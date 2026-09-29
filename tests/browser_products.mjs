@@ -15,7 +15,7 @@ const pending = new Map(), errors = [];
 async function call(method, params = {}, target = session) {
   const id = ++counter;
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {pending.delete(id); reject(new Error(`CDP timeout: ${method}`));}, 12000);
+    const timer = setTimeout(() => {pending.delete(id); reject(new Error(`CDP timeout: ${method}`));}, ['reports', 'search'].includes(scenario) ? 30000 : 12000);
     pending.set(id, {resolve, reject, timer});
     socket.send(JSON.stringify({id, method, params, ...(target ? {sessionId:target} : {})}));
   });
@@ -26,7 +26,7 @@ async function evaluate(expression) {
   return result.result.value;
 }
 async function wait(expression) {
-  const deadline = Date.now()+12000;
+  const deadline = Date.now()+(['reports', 'search'].includes(scenario) ? 30000 : 12000);
   while(Date.now()<deadline) {if(await evaluate(expression)) return; await pause(100);}
   throw new Error(`UI condition timed out: ${expression}\n${await evaluate("document.querySelector('#view')?.innerText || document.body.innerText")}`);
 }
@@ -75,7 +75,13 @@ try {
   session = (await call("Target.attachToTarget",{targetId:target.targetId,flatten:true},null)).sessionId;
   await call("Page.enable"); await call("Runtime.enable"); await call("Log.enable");
   await call("Emulation.setDeviceMetricsOverride",{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
-  if (scenario === "claims") {
+  if (scenario === "search") {
+    const {runSearch} = await import('./browser_search.mjs');
+    await runSearch({baseURL,call,click,fill,wait,has,evaluate,screenshot,pause});
+  } else if (scenario === "reports") {
+    const {runReports} = await import('./browser_reports.mjs');
+    await runReports({baseURL,call,click,fill,wait,has,evaluate,screenshot,pause});
+  } else if (scenario === "claims") {
     const {runClaims} = await import('./browser_claims.mjs');
     await runClaims({baseURL,call,click,fill,wait,has,evaluate,screenshot,pause});
   } else {
@@ -141,6 +147,7 @@ try {
 } catch(error) {
   if(session) await screenshot(`${scenario}-failure.png`).catch(() => {});
   console.error(error);
+  if(errors.length) console.error('Browser errors:', errors);
   process.exitCode = 1;
 } finally {
   if(socket?.readyState === WebSocket.OPEN) {await call("Browser.close",{},null).catch(() => {});socket.close();}
