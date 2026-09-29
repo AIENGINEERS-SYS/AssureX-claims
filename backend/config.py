@@ -72,6 +72,14 @@ def settings():
         "JWT_ACCESS_TOKEN_EXPIRES": timedelta(minutes=15),
         "JWT_REFRESH_TOKEN_EXPIRES": timedelta(days=7),
         "BCRYPT_LOG_ROUNDS": 12,
+        "REPORT_STORAGE_PATH": os.getenv("REPORT_STORAGE_PATH", str(ROOT / "instance" / "reports")),
+        "REPORT_RETENTION_HOURS": _integer("REPORT_RETENTION_HOURS", 24),
+        "REPORT_BATCH_SIZE": _integer("REPORT_BATCH_SIZE", 1000),
+        "REPORT_MAX_PENDING": _integer("REPORT_MAX_PENDING", 3),
+        "REPORT_LEASE_MINUTES": _integer("REPORT_LEASE_MINUTES", 15),
+        "REPORT_PDF_FONT": os.getenv("REPORT_PDF_FONT"),
+        "SEARCH_TIMEOUT_MS": _integer("SEARCH_TIMEOUT_MS", 5000),
+        "SEARCH_RETENTION_DAYS": _integer("SEARCH_RETENTION_DAYS", 30),
         "WARRANTY_NEAR_EXPIRY_DAYS": _integer("WARRANTY_NEAR_EXPIRY_DAYS", 30),
         "WARRANTY_NOTIFICATION_THRESHOLDS": _integer_list("WARRANTY_NOTIFICATION_THRESHOLDS", "90,60,30,7"),
         "DASHBOARD_DISAGREEMENT_GAP": _decimal("DASHBOARD_DISAGREEMENT_GAP", 0.20),
@@ -117,6 +125,13 @@ def settings():
 
 
 def validate_config(app):
+    for name, maximum in (("SEARCH_TIMEOUT_MS", 60000), ("SEARCH_RETENTION_DAYS", 365)):
+        if not 1 <= app.config[name] <= maximum:
+            raise RuntimeError(f"{name} must be between 1 and {maximum}")
+    for name, maximum in (("REPORT_RETENTION_HOURS", 720), ("REPORT_BATCH_SIZE", 10000),
+                          ("REPORT_MAX_PENDING", 20), ("REPORT_LEASE_MINUTES", 1440)):
+        if not 1 <= app.config[name] <= maximum:
+            raise RuntimeError(f"{name} must be between 1 and {maximum}")
     if app.config["DOCUMENT_STORAGE_BACKEND"] not in {"local", "s3"}:
         raise RuntimeError("DOCUMENT_STORAGE_BACKEND must be local or s3")
     if app.config["DOCUMENT_STORAGE_BACKEND"] == "s3" and not app.config["S3_BUCKET"]:

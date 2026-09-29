@@ -413,6 +413,8 @@ Index("ix_notifications_type_created", Notification.notification_type, Notificat
 Index("ix_notifications_priority_read_created", Notification.priority, Notification.is_read, Notification.created_at)
 Index("ix_claims_user_updated", Claim.user_id, Claim.updated_at)
 Index("ix_claims_review_queue", Claim.status, Claim.assigned_reviewer_id, Claim.submitted_at)
+Index("ix_claims_report_employee", Claim.assigned_employee_id, Claim.id)
+Index("ix_claims_report_reviewer", Claim.assigned_reviewer_id, Claim.id)
 Index("ix_reviews_reviewer_date", Review.reviewer_user_id, Review.reviewed_at)
 Index("ix_evaluation_claim_created", EvaluationResult.claim_id, EvaluationResult.created_at)
 
