@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from io import BytesIO
 from time import monotonic
 from typing import Protocol
@@ -31,16 +32,22 @@ class DisabledOCRProvider:
         raise OCRProcessingError("OCR processing is disabled by configuration.")
 
 
+@lru_cache(maxsize=1)
+def _tesseract_engine():
+    """Discover Tesseract once per worker instead of spawning version checks per page."""
+    try:
+        import pytesseract
+        version = str(pytesseract.get_tesseract_version()).splitlines()[0]
+        return pytesseract, version
+    except Exception as exc:
+        raise OCRProcessingError("The configured OCR engine is unavailable.") from exc
+
+
 class TesseractOCRProvider:
     name = "tesseract"
 
     def _engine(self):
-        try:
-            import pytesseract
-            version = str(pytesseract.get_tesseract_version()).splitlines()[0]
-            return pytesseract, version
-        except Exception as exc:
-            raise OCRProcessingError("The configured OCR engine is unavailable.") from exc
+        return _tesseract_engine()
 
     def _prepare(self, image: Image.Image) -> Image.Image:
         image = ImageOps.exif_transpose(image)
@@ -108,7 +115,9 @@ class TesseractOCRProvider:
                         break
                     matrix = fitz.Matrix(200 / 72, 200 / 72)
                     pixmap = page.get_pixmap(matrix=matrix, alpha=False)
-                    image = Image.open(BytesIO(pixmap.tobytes("png")))
+                    # Avoid PNG compression + decode for every scanned PDF page.
+                    # PyMuPDF already gives us packed RGB bytes.
+                    image = Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
                     text, confidence, tesseract_version = self._ocr_image(image, remaining)
                     texts.append(text)
                     if confidence is not None:
@@ -135,7 +144,11 @@ class TesseractOCRProvider:
         return OCRResult(text, confidence, self.name, version)
 
 
+_DISABLED_PROVIDER = DisabledOCRProvider()
+_TESSERACT_PROVIDER = TesseractOCRProvider()
+
+
 def get_ocr_provider() -> OCRProvider:
     if current_app.config["OCR_PROVIDER"] == "disabled":
-        return DisabledOCRProvider()
-    return TesseractOCRProvider()
+        return _DISABLED_PROVIDER
+    return _TESSERACT_PROVIDER

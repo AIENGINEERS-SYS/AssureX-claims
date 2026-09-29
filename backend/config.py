@@ -86,6 +86,9 @@ def settings():
         "DUPLICATE_DESCRIPTION_THRESHOLD": _decimal("DUPLICATE_DESCRIPTION_THRESHOLD", 0.82),
         "PYTHON_MODEL_PATH": os.getenv("PYTHON_MODEL_PATH", str(ROOT / "models" / "assurex_xgboost_final.joblib")),
         "GTM_MODEL_PATH": os.getenv("GTM_MODEL_PATH", str(ROOT / "gtm_model" / "model.json")),
+        "MODEL_PRELOAD_ENABLED": _boolean("MODEL_PRELOAD_ENABLED", environment == "production"),
+        "MODEL_PRELOAD_STRICT": _boolean("MODEL_PRELOAD_STRICT", environment == "production"),
+        "MODEL_PERFORMANCE_TARGET_MS": _integer("MODEL_PERFORMANCE_TARGET_MS", 5000),
         "WARRANTY_POLICY_PATH": os.getenv("WARRANTY_POLICY_PATH", str(ROOT / "data" / "warranty_policies.json")),
         "MODEL_CARD_PATH": os.getenv("MODEL_CARD_PATH", str(ROOT / "instance" / "model_cards")),
         # Multipart framing receives one bounded document per request.
@@ -131,6 +134,8 @@ def validate_config(app):
         raise RuntimeError("OCR confidence thresholds must satisfy 0 <= review <= high <= 1")
     if not 1 <= app.config["OCR_TIMEOUT_SECONDS"] <= 300:
         raise RuntimeError("OCR_TIMEOUT_SECONDS must be between 1 and 300")
+    if not 500 <= app.config["MODEL_PERFORMANCE_TARGET_MS"] <= 60000:
+        raise RuntimeError("MODEL_PERFORMANCE_TARGET_MS must be between 500 and 60000")
     if not 0 <= app.config["WARRANTY_NEAR_EXPIRY_DAYS"] <= 365:
         raise RuntimeError("WARRANTY_NEAR_EXPIRY_DAYS must be between 0 and 365")
     thresholds = app.config["WARRANTY_NOTIFICATION_THRESHOLDS"]

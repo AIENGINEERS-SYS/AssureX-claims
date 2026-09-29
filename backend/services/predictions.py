@@ -178,6 +178,7 @@ class PythonPredictionService:
 
 @lru_cache(maxsize=2)
 def _load_gtm(path, artifact_version):
+    """Load one GTM artifact per worker process and reuse it across requests."""
     try:
         import tensorflowjs as tfjs
         return tfjs.converters.load_keras_model(path)
@@ -185,15 +186,58 @@ def _load_gtm(path, artifact_version):
         raise PredictionError("GTM runtime or model could not be loaded.") from exc
 
 
-def _gtm_labels(model_path):
-    metadata = Path(model_path).with_name("metadata.json")
+@lru_cache(maxsize=4)
+def _load_gtm_labels(metadata_path, artifact_version):
     try:
-        labels = json.loads(metadata.read_text(encoding="utf-8"))["labels"]
+        labels = json.loads(Path(metadata_path).read_text(encoding="utf-8"))["labels"]
     except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
         raise PredictionError("GTM metadata is unavailable or invalid.") from exc
     if not isinstance(labels, list) or len(labels) != 3:
         raise PredictionError("GTM metadata must define three labels.")
-    return labels
+    return tuple(labels)
+
+
+def _gtm_labels(model_path, artifact_version=None):
+    model_path = Path(model_path)
+    metadata = model_path.with_name("metadata.json")
+    try:
+        cache_version = artifact_version or f"metadata-{metadata.stat().st_mtime_ns}"
+    except OSError as exc:
+        raise PredictionError("GTM metadata is unavailable or invalid.") from exc
+    return list(_load_gtm_labels(str(metadata.resolve()), cache_version))
+
+
+def preload_models(app):
+    """Warm both model caches once per application worker.
+
+    Production calls this during startup so the first live prediction does not
+    pay TensorFlow/joblib model-loading cost. Artifact versions remain part of
+    the cache key, so replacing a model naturally creates a new cached entry.
+    """
+    started = time.perf_counter()
+    python_path = Path(app.config["PYTHON_MODEL_PATH"])
+    gtm_path = Path(app.config["GTM_MODEL_PATH"])
+
+    python_version = _artifact_version(python_path)
+    python_started = time.perf_counter()
+    _load_python(str(python_path.resolve()), python_path.stat().st_mtime_ns)
+    python_ms = round((time.perf_counter() - python_started) * 1000)
+
+    gtm_version = _artifact_version(gtm_path)
+    gtm_started = time.perf_counter()
+    _load_gtm(str(gtm_path.resolve()), gtm_version)
+    _gtm_labels(gtm_path, gtm_version)
+    gtm_ms = round((time.perf_counter() - gtm_started) * 1000)
+
+    result = {
+        "python_version": python_version,
+        "gtm_version": gtm_version,
+        "python_load_ms": python_ms,
+        "gtm_load_ms": gtm_ms,
+        "total_load_ms": round((time.perf_counter() - started) * 1000),
+    }
+    app.extensions["model_preload"] = result
+    return result
 
 
 class GTMPredictionService:
@@ -211,11 +255,12 @@ class GTMPredictionService:
             else:
                 import numpy as np
                 from PIL import Image
-                image = np.asarray(Image.open(card).convert("RGB"), dtype="float32")
+                with Image.open(card) as source:
+                    image = np.asarray(source.convert("RGB"), dtype="float32")
                 image = ((image / 127.5) - 1.0)[None, ...]
                 raw = _load_gtm(str(model_path.resolve()), version).predict(image, verbose=0)[0]
             duration = round((time.perf_counter() - started) * 1000)
-            labels = _gtm_labels(model_path)
+            labels = _gtm_labels(model_path, version)
             if isinstance(raw, dict):
                 labels, raw = list(raw), list(raw.values())
             result = normalized_result("gtm", version, labels, raw, duration)

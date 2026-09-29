@@ -54,4 +54,18 @@ def create_app(config=None):
     for blueprint in (auth.bp, admin.bp, claims.bp, review.bp, products.bp, claim_workflow.bp, documents.bp,
                       dashboard.bp, predictions.bp, notifications.bp):
         app.register_blueprint(blueprint)
+
+    if app.config["MODEL_PRELOAD_ENABLED"]:
+        from .services.predictions import preload_models
+        try:
+            with app.app_context():
+                metrics = preload_models(app)
+            app.logger.info(
+                "model_preload_complete python_ms=%s gtm_ms=%s total_ms=%s",
+                metrics["python_load_ms"], metrics["gtm_load_ms"], metrics["total_load_ms"],
+            )
+        except Exception as exc:
+            app.logger.exception("model_preload_failed error=%s", type(exc).__name__)
+            if app.config["MODEL_PRELOAD_STRICT"]:
+                raise RuntimeError("Configured ML models could not be preloaded.") from exc
     return app

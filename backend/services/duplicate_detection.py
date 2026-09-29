@@ -21,7 +21,8 @@ class DuplicateDetectionService:
 
     def evaluate(self, claim):
         hashes = {d.file_hash for d in claim.documents if d.file_hash}
-        matching_hash_claims = select(Document.claim_id).where(Document.file_hash.in_(hashes)) if hashes else None
+        matching_hash_claims = (select(Document.claim_id).where(Document.file_hash.in_(hashes)).distinct()
+                                if hashes else None)
         conditions = [Claim.user_id == claim.user_id]
         if claim.product_id:
             conditions.append(Claim.product_id == claim.product_id)
