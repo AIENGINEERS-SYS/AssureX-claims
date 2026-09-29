@@ -32,13 +32,13 @@ This report maps the policy/reporting deliverables from the AssureX SRS to repos
 | Rules stored outside scattered Python code | JSON policy/configuration files + policy service | Present |
 | Functional/integration/boundary/security/model/rule tests | `tests/` and `fuzzy.txt` | Present |
 | Report/export runtime feature | README currently states not implemented | Pending |
-| 70/15/15 card split | generator currently implements 80/10/10 | Needs correction |
+| 70/15/15 card split | `dataset_generator/claim_card_generator.py` + `tests/test_claim_card_generator.py` | Implemented; current dataset verified at 1,680 / 360 / 360 |
 | GTM >=85% unseen-test evidence | no committed comparable test metrics found | Pending |
 
 ## Priority items before final submission
 
 1. Run the final held-out GTM test set and populate at least 30 paired Python/GTM rows.
-2. Correct `dataset_generator/claim_card_generator.py` to the SRS-required 70/15/15 split and regenerate the GTM card dataset.
+2. Regenerate the GTM card dataset from the now-enforced 70/15/15 split, then retrain and re-export the GTM model.
 3. Add GTM training screenshots/configuration, class image counts, incorrect samples and retraining notes.
 4. Implement the access-controlled downloadable claim report and CSV/Excel-compatible export feature required by the functional specification.
 5. Retain test results from the final repository state and deployment.
