@@ -33,6 +33,10 @@ function ErrorBox({error}) {
   return error ? <div className="form-error" role="alert">{error}</div> : null;
 }
 
+function NoticeBox({notice}) {
+  return notice ? <div className="form-success" role="status">{notice}</div> : null;
+}
+
 function PasswordControl({label, name, value, onChange, autoComplete, describedBy}) {
   const [visible, setVisible] = useState(false);
   return <label className="auth-field">
@@ -65,6 +69,7 @@ function Auth({onAuth}) {
   const [mode, setMode] = useState('login');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -80,9 +85,10 @@ function Auth({onAuth}) {
   const strengthLabel = password ? ['Weak', 'Fair', 'Good', 'Strong', 'Very strong'][strength] : 'Not set';
   const passwordsMatch = !confirmPassword || password === confirmPassword;
 
-  function changeMode(nextMode) {
+  function changeMode(nextMode, noticeMessage = '') {
     setMode(nextMode);
     setError('');
+    setNotice(noticeMessage);
     setPassword('');
     setConfirmPassword('');
   }
@@ -90,6 +96,7 @@ function Auth({onAuth}) {
   async function submit(event) {
     event.preventDefault();
     setError('');
+    setNotice('');
 
     const form = event.currentTarget;
     if (!form.reportValidity()) return;
@@ -109,7 +116,11 @@ function Auth({onAuth}) {
     const values = Object.fromEntries(new FormData(form));
     delete values.confirm_password;
     try {
-      if (mode === 'register') await api.post('/auth/register', values);
+      if (mode === 'register') {
+        await api.post('/auth/register', values);
+        changeMode('login', 'Account created successfully. Sign in to continue.');
+        return;
+      }
       const {data} = await api.post('/auth/login', {email: values.email, password: values.password});
       if (!['customer', 'admin'].includes(data.user.role)) {
         setSession(data);
@@ -217,6 +228,7 @@ function Auth({onAuth}) {
             </>}
 
             <ErrorBox error={error} />
+            <NoticeBox notice={notice} />
 
             <button id="auth-submit" type="submit" className="button full-width auth-submit" disabled={busy}>
               <LogIn size={17} />
