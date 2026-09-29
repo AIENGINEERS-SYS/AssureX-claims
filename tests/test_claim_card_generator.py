@@ -193,3 +193,16 @@ def test_generator_requires_at_least_two_training_variants(tmp_path, monkeypatch
     with pytest.raises(SystemExit) as exc:
         main()
     assert exc.value.code == 2
+
+def test_project_dataset_uses_required_70_15_15_split():
+    dataset = Path(__file__).resolve().parents[1] / "data" / "assurex_nigeria_warranty_claims_v2.csv"
+    with dataset.open("r", encoding="utf-8-sig", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+
+    _, counts, ratios = validate_splits(rows)
+
+    assert len(rows) == 2400
+    assert counts == {"train": 1680, "validation": 360, "test": 360}
+    assert ratios == pytest.approx(
+        {"train": 0.70, "validation": 0.15, "test": 0.15}
+    )
