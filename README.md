@@ -72,6 +72,12 @@ Start React in a second terminal:
 npm --prefix frontend run dev -- --host 127.0.0.1
 ```
 
+To process queued report exports during local development, run a worker in a third terminal:
+
+```powershell
+python -m flask --app backend:create_app report-worker
+```
+
 Open `http://127.0.0.1:5173`. Confirm the API is available at `http://127.0.0.1:8000/api/health`; it should return `{"status":"ok"}`.
 
 Interactive API documentation is available at `http://127.0.0.1:8000/docs`, with the machine-readable OpenAPI document at `http://127.0.0.1:8000/openapi.json`. Protected endpoints use JWT Bearer authentication: log in through the documented auth endpoint, copy the access token, and use Swagger UI's **Authorize** control.
@@ -105,7 +111,7 @@ FRONTEND_ORIGINS=https://${{Frontend.RAILWAY_PUBLIC_DOMAIN}}
 FRONTEND_URL=https://${{Frontend.RAILWAY_PUBLIC_DOMAIN}}
 ```
 
-The start script applies migrations and starts Waitress on Railway's assigned `PORT`.
+The start script applies migrations, starts the report worker with ML preloading disabled, and then starts Waitress on Railway's assigned `PORT`. Set `REPORT_WORKER_ENABLED=false` only when a separately supervised worker processes the same report queue and storage. Keep a single API replica while report files use local storage, and mount persistent private storage at `REPORT_STORAGE_PATH` if completed downloads must survive redeploys.
 
 ### Frontend service
 
@@ -307,14 +313,14 @@ When more evidence is requested, open the claim from the notification or claim l
 
 Open `/reports`, choose a report type and filters, then preview or request a PDF, CSV or Excel export. Completed files appear in your private report history. Customers, employees, reviewers and administrators receive reports limited to their current ownership or assignments.
 
-Apply the database migrations and run a dedicated worker alongside the API:
+Apply the database migrations and run a worker alongside the API in local development:
 
 ```powershell
 python -m flask --app backend:create_app db upgrade
 python -m flask --app backend:create_app report-worker
 ```
 
-Web and worker processes must share `REPORT_STORAGE_PATH`. See [reporting architecture, API examples and deployment settings](documentation/reports.md). Synthetic [PDF](documentation/examples/reports/sample-customer-report.pdf), [CSV](documentation/examples/reports/sample-customer-report.csv) and [Excel](documentation/examples/reports/sample-customer-report.xlsx) examples are included.
+On Railway, `scripts/railpack-start.sh` starts that worker automatically and disables ML preloading in the worker process so the model artifacts are not loaded twice. Web and worker processes must share `REPORT_STORAGE_PATH`. See [reporting architecture, API examples and deployment settings](documentation/reports.md). Synthetic [PDF](documentation/examples/reports/sample-customer-report.pdf), [CSV](documentation/examples/reports/sample-customer-report.csv) and [Excel](documentation/examples/reports/sample-customer-report.xlsx) examples are included.
 
 ## Run automated tests
 
