@@ -59,6 +59,40 @@ def test_report_preview_permissions_and_ownership(app, client, accounts, claims)
     assert admin['analytics']['total_claims'] == 2
 
 
+def test_customer_reports_hide_internal_review_and_model_details(app, client, accounts, claims):
+    with app.app_context():
+        claim = db.session.get(Claim, claims['customer']['claim'])
+        db.session.add(Review(claim_id=claim.id, reviewer_user_id=accounts['reviewer'],
+            decision='manual_review_continue', comments='INTERNAL REVIEW NOTE',
+            override_applied=True, override_reason='INTERNAL OVERRIDE REASON'))
+        db.session.commit()
+
+    headers = auth(client)
+    preview = client.get('/api/reports', headers=headers)
+    assert preview.status_code == 200, preview.json
+    sections = preview.json['sections']
+    for internal in ('Reviews', 'Rules', 'Python predictions', 'GTM predictions'):
+        assert internal not in sections
+    claim_row = sections['Claims']['items'][0]
+    assert 'assigned_employee_id' not in claim_row
+    assert 'assigned_reviewer_id' not in claim_row
+    assert 'manual_review_required' not in claim_row
+
+    _, response = exported(app, client, headers, 'csv')
+    body = response.data.decode('utf-8-sig')
+    assert 'INTERNAL REVIEW NOTE' not in body
+    assert 'INTERNAL OVERRIDE REASON' not in body
+    assert 'Python predictions' not in body
+    assert 'GTM predictions' not in body
+    response.close()
+
+    admin_preview = client.get('/api/reports', headers=auth(client, 'admin')).json
+    assert admin_preview['sections']['Reviews']['items'][0]['comments'] == 'INTERNAL REVIEW NOTE'
+    assert 'Rules' in admin_preview['sections']
+    assert 'Python predictions' in admin_preview['sections']
+    assert 'GTM predictions' in admin_preview['sections']
+
+
 def test_reviewer_scope_is_assignment_only(app, client, accounts, claims):
     headers = auth(client, 'reviewer')
     claim_id = claims['customer']['claim']
@@ -85,7 +119,7 @@ def test_artifact_content_audit_and_history(app, client, accounts, claims, forma
             decision='request_information', comments='Please provide evidence.'))
         reference = claim.claim_id
         db.session.commit()
-    headers = auth(client)
+    headers = auth(client, 'admin')
     job_id, result = exported(app, client, headers, format)
     assert 'attachment;' in result.headers['Content-Disposition']
     assert result.headers['Cache-Control'] == 'no-store'

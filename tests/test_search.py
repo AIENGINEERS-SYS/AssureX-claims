@@ -137,6 +137,7 @@ def test_role_scopes_reviewable_queue_and_global_group_privacy(app, client, acco
     assert get(client, headers=admin)['total'] == 4
     assert client.get('/api/review/search', headers=customer).status_code == 403
     assert get(client, '/api/review/search', reviewer)['total'] == 1
+    assert get(client, '/api/review/search', admin)['total'] == 1
     with app.app_context():
         other = db.session.get(Claim, records['other']['claim'])
         other.status, other.manual_review_required = 'manual_review', True
