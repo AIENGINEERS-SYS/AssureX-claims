@@ -154,7 +154,10 @@ def build_openapi_spec(app):
             operation = {
                 "tags": [tag],
                 "summary": _summary(rule.endpoint, method, path),
-                "operationId": f"{rule.endpoint.replace('.', '_')}_{method.lower()}",
+                "operationId": (
+                    f"{rule.endpoint.replace('.', '_')}_{method.lower()}_"
+                    + re.sub(r"[^a-zA-Z0-9]+", "_", path).strip("_")
+                ),
                 "responses": {
                     "200": {"description": "Successful response"},
                     "400": {"description": "Validation or request error",
@@ -193,7 +196,7 @@ def build_openapi_spec(app):
                 "an access token, then click Authorize in Swagger UI."
             ),
         },
-        "servers": [{"url": request.url_root.rstrip("/"), "description": "Current AssureX server"}],
+        "servers": [{"url": "/", "description": "Current AssureX server"}],
         "tags": [{"name": tag} for tag in sorted(tags)],
         "paths": paths,
         "components": {
