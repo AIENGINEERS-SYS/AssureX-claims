@@ -121,6 +121,10 @@ def settings():
         "RATELIMIT_DEFAULT": "200 per minute",
         "RATELIMIT_HEADERS_ENABLED": True,
         "RATELIMIT_SWALLOW_ERRORS": False,
+        # Forwarding headers are attacker-controlled unless the deployment sits
+        # behind a trusted reverse proxy that appends/overwrites X-Forwarded-For.
+        "RATELIMIT_TRUST_PROXY_HEADERS": _boolean("RATELIMIT_TRUST_PROXY_HEADERS", False),
+        "RATELIMIT_TRUSTED_PROXY_COUNT": _integer("RATELIMIT_TRUSTED_PROXY_COUNT", 1),
     }
 
 
@@ -179,6 +183,12 @@ def validate_config(app):
         raise RuntimeError("MODEL_STRONG_MAX_GAP cannot exceed MODEL_ACCEPTABLE_MAX_GAP")
     if app.config["DUPLICATE_MEDIUM_THRESHOLD"] > app.config["DUPLICATE_HIGH_THRESHOLD"]:
         raise RuntimeError("Duplicate thresholds must be ordered medium <= high")
+    trust_proxy = app.config["RATELIMIT_TRUST_PROXY_HEADERS"]
+    trusted_proxy_count = app.config["RATELIMIT_TRUSTED_PROXY_COUNT"]
+    if type(trust_proxy) is not bool:
+        raise RuntimeError("RATELIMIT_TRUST_PROXY_HEADERS must be true or false")
+    if type(trusted_proxy_count) is not int or not 1 <= trusted_proxy_count <= 10:
+        raise RuntimeError("RATELIMIT_TRUSTED_PROXY_COUNT must be between 1 and 10")
     secret = app.config.get("JWT_SECRET_KEY")
     if not isinstance(secret, str) or len(secret.encode()) < 32 or secret.startswith("replace-"):
         raise RuntimeError("Set JWT_SECRET_KEY to a randomly generated secret of at least 32 bytes")
