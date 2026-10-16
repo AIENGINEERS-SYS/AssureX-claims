@@ -141,7 +141,7 @@ def validate_config(app):
             import boto3  # noqa: F401
         except ModuleNotFoundError as exc:
             raise RuntimeError(
-                "S3 storage requires boto3; install backend/requirements-s3.txt."
+                "S3 storage requires the boto3 runtime dependency."
             ) from exc
     if app.config["OCR_PROVIDER"] not in {"tesseract", "disabled"}:
         raise RuntimeError("OCR_PROVIDER must be tesseract or disabled")
