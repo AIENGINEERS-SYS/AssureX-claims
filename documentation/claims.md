@@ -283,3 +283,42 @@ installed; no photographic model inference is claimed. For the opt-in browser
 journey, use the existing `ASSUREX_BROWSER_TESTS=1` instructions above. The browser
 scenario covers photographs without a repeat receipt, draft re-entry, review,
 submission and mobile layout.
+
+### Processing recovery and implementation review fixes
+
+If a request stops after its file has been saved, its evidence remains recoverable.
+The API exposes `can_retry` after the processing attempt exceeds
+`max(60, OCR_TIMEOUT_SECONDS + 30)` seconds. The same retry endpoint starts a fresh
+attempt. Completion updates are conditional on the attempt and immutable evidence
+identity; late requests cannot overwrite a newer result or reveal a replacement
+record if an internal row ID is reused. No additional migration is needed beyond
+the existing evidence metadata migration.
+
+The wizard and follow-up evidence view poll active processing and queue mutations
+using the latest server version. Both support multiple-file selection. Duplicate
+upload responses reload saved evidence before subsequent queued actions; other
+session conflicts still require reload instead of silently overwriting changes.
+
+Legacy scalar or value-wrapped confirmations remain readable. Historical damage
+OCR review flags cannot block a claim behind an irrelevant purchase-field editor.
+Older photographs without recorded visual assessment require human review; they
+are not represented as completed damage classification. Unresolved assessment
+warnings and metadata conflicts are included in final decision evidence even when
+the claim-card models agree.
+
+Visual providers must supply a nonempty `provider` and `version`, a boolean
+`needs_review`, a list of warning strings and category-specific `fields`. Each field
+is an object containing `value` and finite confidence between 0 and 1. Product
+fields are `product_name`, `product_category`, `brand`, `model_number`, and
+`serial_number`. Damage fields are `damage_category`, `description`,
+`affected_components` (a list of strings), and `severity`. Unsupported fields,
+malformed values and nonfinite confidence fail safely. Low-confidence/empty
+assessments require review regardless of a provider's completion flag. Failed
+retries preserve previous observations and confirmations.
+
+Partial corrections preserve confirmed warranty units. A nonempty warranty duration
+needs a known months/years unit, with at most 1200 effective months. Supplementary
+purchase provenance references the stable internal claim ID, including while the
+claim is a draft. Warranty evaluation checks both coverage start and expiry dates.
+Prediction completeness and reviewer missing-evidence lists use the applicable
+registration-aware requirements without inventing receipt attachments.

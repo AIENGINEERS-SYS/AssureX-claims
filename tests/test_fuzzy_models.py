@@ -434,7 +434,7 @@ def test_python_features_switch_on_uploaded_evidence(app, accounts):
     assert features["product_photo_available"] is True
     assert features["serial_or_imei_available"] is True
     assert features["fault_evidence_type"] == "Customer photo"    # stored as fault_evidence
-    assert features["document_completeness_score"] == pytest.approx(3 / 4)
+    assert features["document_completeness_score"] == 1.0
 
 
 def test_python_features_count_prior_repairs(app, claims):

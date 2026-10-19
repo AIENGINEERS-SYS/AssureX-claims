@@ -75,7 +75,8 @@ function DocumentPreview({document}) {
     if (!document.file_type.startsWith('image/')) return;
     let active = true, objectUrl = '';
     api.get(`/documents/${document.id}/content`, {responseType: 'blob'}).then(({data}) => {
-      objectUrl = URL.createObjectURL(data); if (active) setUrl(objectUrl);
+      if (!active) return;
+      objectUrl = URL.createObjectURL(data); setUrl(objectUrl);
     }).catch(err => {if (active) setError(errorMessage(err));});
     return () => {active = false; if (objectUrl) URL.revokeObjectURL(objectUrl);};
   }, [document.id]);
@@ -140,7 +141,7 @@ function OCRReview({document, review, retry, busy}) {
         onClick={() => review(document.id, values)}>{document.review_status === 'confirmed' ? 'Update confirmed information' : 'Save corrections and confirm'}</button>
       {raw && <details className="raw-ocr"><summary>View raw OCR text</summary><pre>{raw}</pre></details>}
     </>}
-    {document.ocr_status === 'completed_with_warnings' && <button type="button" disabled={busy} onClick={() => retry(document.id)}>Retry analysis</button>}
+    {(document.ocr_status === 'completed_with_warnings' || (document.can_retry && ['pending', 'processing'].includes(document.ocr_status))) && <button type="button" disabled={busy} onClick={() => retry(document.id)}>Retry analysis</button>}
   </details>;
 }
 

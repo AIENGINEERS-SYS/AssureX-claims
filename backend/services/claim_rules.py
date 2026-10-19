@@ -52,12 +52,15 @@ class ClaimRuleEngine:
         expiry = add_months(claim.product.purchase_date, policy.warranty_months)
         if claim.warranty and claim.warranty.expiry_date:
             expiry = min(expiry, claim.warranty.expiry_date)
-        active = claim_date is not None and claim_date <= expiry
+        coverage_start = max(claim.product.purchase_date, claim.warranty.start_date) if claim.warranty else claim.product.purchase_date
+        active = claim_date is not None and coverage_start <= claim_date <= expiry
         results.append(self._result("warranty_expiry", "Warranty expiry", "coverage",
             "passed" if active else "failed" if claim_date else "manual_review",
             "info" if active else "high", "Claim is within the warranty period." if active else
-            "Claim date is missing." if not claim_date else "Warranty expired before this claim was submitted.",
-            {"purchase_date": claim.product.purchase_date.isoformat(),
+            "Claim date is missing." if not claim_date else
+            "Warranty coverage had not started when this claim was submitted." if claim_date < coverage_start else
+            "Warranty expired before this claim was submitted.",
+            {"purchase_date": claim.product.purchase_date.isoformat(), "coverage_start": coverage_start.isoformat(),
              "claim_date": claim_date.isoformat() if claim_date else None, "warranty_expiry": expiry.isoformat()}))
 
         serials = {"registered_product": claim.product.serial_number}

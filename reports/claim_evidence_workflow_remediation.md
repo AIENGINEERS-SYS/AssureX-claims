@@ -121,3 +121,46 @@ editing them uses the product-management flow.
 
 API payloads, category mapping, setup commands and local verification steps are in
 `documentation/claims.md`.
+
+## Implementation review follow-up
+
+Confirmed defects found and fixed during the follow-up review:
+
+- Historical damage evidence could retain a purchase-OCR review flag with no
+  applicable editor, blocking draft progression. Review status now considers only
+  applicable observations, and old photos explicitly require visual review.
+- Scalar/value-wrapped legacy confirmations could raise errors in claim loading,
+  review and conflict comparison. Both legacy formats now normalize safely.
+- Partial corrections could lose warranty units, and supplementary provenance used
+  a public draft reference that changes at submission. Units are preserved and
+  provenance now records the stable internal claim ID. Invalid effective coverage
+  durations are rejected without changing the claim version.
+- A failed retry could discard the previous visual assessment, and malformed model
+  outputs/nonfinite confidence could reach persistence or produce false completion.
+  Prior analysis is preserved and provider contracts are validated. Product vision
+  identity and brand observations are checked against registration.
+- Unresolved photo assessments could disappear from the final model-assisted
+  decision. They now produce an explicit manual-review rule, while genuine policy
+  exclusions and expired/not-yet-started coverage remain authoritative.
+- Interrupted processing could remain stuck indefinitely. Expired attempts can now
+  be retried. Conditional completion rejects superseded attempts, deletions and
+  reused internal IDs. Immutable identity checks across commit boundaries prevent
+  replacement-record exposure. API tests exercise both race windows.
+- Multiple follow-up uploads could send the same stale claim version. Both views
+  now share a recoverable queue that reads the latest version inside each action.
+  Active processing is polled without resetting form input. Duplicate-upload
+  recovery refreshes the saved evidence. Closing a pending preview no longer
+  leaks an object URL.
+- Prediction completeness still penalized the new flow for omitted repeat receipts
+  and miscounted stored fault evidence; the reviewer dashboard also omitted
+  conditional missing requirements. Both now use applicable requirements, preserving
+  the distinction between registered information and an actual receipt attachment.
+
+Validation: a broader backend regression run passed **338 tests**. The final API/review/security
+run passed **89 tests**, including **26 implementation-review regressions**, after
+the identity and provider-confidence guards. Frontend category render checks,
+mutation-queue concurrency/recovery checks, the production build, Python compilation
+and whitespace/JavaScript syntax checks passed. These test runs overlap; their
+counts are not added together.
+Existing real GTM runtime and browser environment limitations described above
+remain; this review does not claim those checks passed.

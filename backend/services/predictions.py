@@ -104,7 +104,13 @@ def _document_value(claim, key):
 
 def python_features(claim, policy, columns):
     import numpy as np
-    docs = {document.document_type for document in claim.documents}
+    from .document_service import public_document_type
+    from .evidence import required_documents
+    docs = {public_document_type(document.document_type) for document in claim.documents}
+    if "invoice" in docs:
+        docs.add("receipt")
+    waived = {"receipt", "serial_number_image"} - set(required_documents(claim))
+    effective_required = {public_document_type(kind) for kind in policy.required_documents} - waived
     claim_date = claim.submission_date or (claim.submitted_at.date() if claim.submitted_at else None)
     purchase = claim.product.purchase_date
     fault = claim.fault_date
@@ -134,8 +140,8 @@ def python_features(claim, policy, columns):
         # list. Treat completeness as unknown/conservative rather than dividing
         # by zero and turning a recoverable policy warning into inference failure.
         "document_completeness_score": (
-            len(docs & set(policy.required_documents)) / len(policy.required_documents)
-            if policy.required_documents else 0.0
+            len(docs & effective_required) / len(effective_required)
+            if effective_required else 1.0 if policy.required_documents else 0.0
         ),
         "claim_channel": "Online support form", "manufacture_to_purchase_days": np.nan,
         "purchase_to_fault_days": (fault - purchase).days if fault else np.nan,

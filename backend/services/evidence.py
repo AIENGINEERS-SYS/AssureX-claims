@@ -1,5 +1,6 @@
 """Evidence vocabulary, scoped extraction, and honest visual-analysis boundaries."""
 from io import BytesIO
+import math
 from PIL import Image, ImageStat
 
 CATEGORIES = {
@@ -36,9 +37,9 @@ def required_documents(claim):
     """
     required = ["product_image", "damage_evidence"]
     product = claim.product
-    if not product or not (product.purchase_date and product.retailer and product.purchase_price is not None):
+    if not product or not (product.purchase_date and product.retailer.strip() and product.purchase_price is not None):
         required.append("receipt")
-    if not product or not (product.serial_number and product.model_number):
+    if not product or not (product.serial_number.strip() and product.model_number.strip()):
         required.append("serial_number_image")
     return required
 
@@ -67,13 +68,61 @@ def visual_assessment(content, mime_type, kind):
         result["warnings"].append("A photograph is recommended for visual assessment.")
     provider = current_app.extensions.get("evidence_vision")
     if provider:
-        assessment = provider.assess(content, mime_type, category(kind))
-        # The provider owns confidence/uncertainty; missing certainty means review.
-        result.update({key: assessment[key] for key in ("fields", "provider", "version", "needs_review")
-                       if key in assessment})
-        result["warnings"].extend(assessment.get("warnings", []))
+        assessment = validate_visual_result(provider.assess(content, mime_type, category(kind)), kind)
+        result.update({key: assessment[key] for key in ("fields", "provider", "version", "needs_review")})
+        result["warnings"].extend(assessment["warnings"])
     else:
         result["warnings"].append("Visual identification requires manual review; no photographic analysis model is configured."
             if category(kind) == "PRODUCT_IMAGE" else
             "Damage type, affected components and severity require manual assessment; no damage model is configured.")
     return result
+
+
+
+def validate_visual_result(assessment, kind):
+    from flask import current_app
+    from .ocr_service import OCRProcessingError
+    allowed = ({"product_name", "product_category", "brand", "model_number", "serial_number"}
+        if category(kind) == "PRODUCT_IMAGE" else
+        {"damage_category", "description", "affected_components", "severity"})
+    def invalid():
+        raise OCRProcessingError("The visual provider returned an invalid assessment. Manual review is required.")
+    if not isinstance(assessment, dict) or not isinstance(assessment.get("fields", {}), dict):
+        invalid()
+    fields = assessment.get("fields", {})
+    if set(fields) - allowed:
+        invalid()
+    for field, item in fields.items():
+        if not isinstance(item, dict) or set(item) - {"value", "confidence", "state"}:
+            invalid()
+        confidence = item.get("confidence", 0)
+        if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not math.isfinite(confidence) or not 0 <= confidence <= 1:
+            invalid()
+        if "state" in item and item["state"] not in {"detected", "uncertain", "not_detected", "ambiguous"}:
+            invalid()
+        value = item.get("value")
+        if value is not None and ((category(kind) == "PRODUCT_IMAGE" and not isinstance(value, str)) or
+                (field == "affected_components" and not isinstance(value, list))):
+            invalid()
+        if value is not None:
+            if isinstance(value, str):
+                if len(value) > 2000:
+                    invalid()
+            elif isinstance(value, list):
+                if len(value) > 30 or any(not isinstance(x, str) or len(x) > 200 for x in value):
+                    invalid()
+            elif isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                invalid()
+    warnings = assessment.get("warnings", [])
+    if not isinstance(warnings, list) or len(warnings) > 30 or any(not isinstance(x, str) or len(x) > 2000 for x in warnings):
+        invalid()
+    needs_review = assessment.get("needs_review", True)
+    if not isinstance(needs_review, bool):
+        invalid()
+    detected = [item for item in fields.values() if item.get("value") not in (None, "", [])]
+    uncertain = not detected or any(item.get("confidence", 0) < current_app.config["OCR_HIGH_CONFIDENCE_THRESHOLD"] for item in detected)
+    provider, version = assessment.get("provider"), assessment.get("version")
+    if not isinstance(provider, str) or not provider.strip() or len(provider) > 80 or not isinstance(version, str) or not version.strip() or len(version) > 80:
+        invalid()
+    return {"fields": fields, "warnings": warnings, "provider": provider, "version": version,
+            "needs_review": needs_review or uncertain}

@@ -4,6 +4,7 @@ from sqlalchemy import select
 from backend.db.models import EvaluationResult, RuleResult
 from backend.extensions import db
 from .claim_rules import ClaimRuleEngine
+from .document_service import needs_manual_assessment, metadata_conflicts
 from .decision_engine import DecisionEngine
 from .duplicate_detection import DuplicateDetectionService
 from .model_comparison import ModelComparisonService
@@ -60,6 +61,13 @@ class ClaimEvaluationService:
                 errors[key] = str(exc)
 
         rules, contradictions = ClaimRuleEngine().evaluate(claim, policy)
+        unresolved = [document.document_id for document in claim.documents
+            if needs_manual_assessment(document) or metadata_conflicts(document)]
+        if unresolved:
+            rules.append({"rule_code": "evidence_assessment", "rule_name": "Evidence assessment",
+                "rule_category": "evidence", "result": "manual_review", "passed": False,
+                "severity": "medium", "message": "Evidence analysis or metadata conflicts require human review.",
+                "evidence": {"document_ids": unresolved}})
         if policy_error:
             rules.insert(0, {"rule_code": "policy_configuration", "rule_name": "Warranty policy",
                 "rule_category": "coverage", "result": "manual_review", "passed": False,

@@ -12,7 +12,7 @@ from backend.services.claim_storage import storage, storage_key, total_limit, va
 from backend.services.claim_submission import customer_only, lock_draft, owned_claim, workflow_json
 from backend.services.document_errors import DocumentError, document_error
 from backend.services.document_service import (document_json, duplicate_on_other_claim, process_document,
-    review_document, stored_document_type)
+    review_document, stored_document_type, extraction, confirmation, start_attempt, can_retry, processing_document)
 from .claim_schemas import DocumentMutationSchema, OCRReviewSchema
 from .common import audit
 from .schemas import body
@@ -70,6 +70,8 @@ def upload_to_claim(claim, data, upload):
         store.save(key, content, mime)
         db.session.add(document)
         db.session.flush()
+        identity = (document.id, document.document_id, claim.id)
+        start_attempt(document)
         audit("document_uploaded", document, claim_id=claim.id)
         if cross_claim:
             audit("duplicate_detected", document, new={"scope": "cross_claim"}, claim_id=claim.id)
@@ -90,6 +92,7 @@ def upload_to_claim(claim, data, upload):
         _audit_rejection(claim, "storage_failure")
         raise document_error("storage_failure", "The document could not be stored. Please retry.", 503) from None
 
+    document = processing_document(*identity)
     # OCR is a separate committed phase. A future worker can invoke this same service.
     audit("ocr_started", document, claim_id=claim.id)
     action = process_document(document, content)
@@ -98,7 +101,7 @@ def upload_to_claim(claim, data, upload):
     current_app.logger.info("document_processed claim_id=%s document_id=%s ocr_status=%s duration_ms=%s",
         claim.id, document.id, document.ocr_status, document.processing_duration_ms)
     db.session.commit()
-    return document
+    return processing_document(*identity)
 
 
 def accessible_document(document_id):
@@ -184,7 +187,7 @@ def review_ocr(document_id):
     document = accessible_document(document_id)
     claim = document.claim
     if document.ocr_status in {"pending", "processing"}:
-        raise Conflict("OCR must finish successfully before extracted information can be confirmed.")
+        raise Conflict("Wait for document processing to finish before confirming corrections.")
     from backend.services.evidence import applicable_fields
     allowed = set(applicable_fields(document.document_type))
     if not allowed:
@@ -194,6 +197,16 @@ def review_ocr(document_id):
     if extras or ("warranty_duration_unit" in data and "warranty_duration" not in allowed):
         from marshmallow import ValidationError
         raise ValidationError({"document": ["Correction fields do not apply to this evidence category."]})
+    if "warranty_duration" in allowed:
+        previous = confirmation(document, "warranty_duration") or {}
+        observed = extraction(document, "warranty_duration")
+        duration = data.get("warranty_duration", previous.get("confirmed_value", observed.get("value")))
+        unit = data.get("warranty_duration_unit", previous.get("unit", observed.get("unit")))
+        if duration is not None and (isinstance(duration, bool) or not isinstance(duration, int) or
+                unit not in {"months", "years"} or
+                (unit == "years" and duration > 100)):
+            from marshmallow import ValidationError
+            raise ValidationError({"warranty_duration": ["Specify months or years and at most 1200 months of coverage."]})
     _lock_review_claim(claim, data.pop("version"))
     data.pop("confirm")
     corrected = review_document(document, data, current_user.id)
@@ -208,7 +221,9 @@ def review_ocr(document_id):
         # the exact human correction that produced the verified value.
         audit("ocr_corrected", document, old={field: item["ocr_value"] for field, item in changes.items()},
               new={field: item["confirmed_value"] for field, item in changes.items()}, claim_id=claim.id)
+    identity = (document.id, document.document_id, claim.id)
     db.session.commit()
+    document = processing_document(*identity)
     return {"document": document_json(document, include_text=True), "claim": workflow_json(claim)}
 
 
@@ -218,14 +233,19 @@ def retry_ocr(document_id):
     data = body(DocumentMutationSchema())
     document = accessible_document(document_id)
     claim = document.claim
-    if document.ocr_status not in {"failed", "completed_with_warnings"}:
-        raise Conflict("Only failed or warning OCR results can be retried.")
+    if not can_retry(document):
+        raise Conflict("This evidence is not retryable yet. Wait for active processing to finish.")
     _lock_review_claim(claim, data["version"])
     content = storage().open(document.storage_path)
+    identity = (document.id, document.document_id, claim.id)
+    start_attempt(document)
+    db.session.commit()
+    document = processing_document(*identity)
     audit("ocr_started", document, new={"retry": True}, claim_id=claim.id)
     action = process_document(document, content, force=True)
     audit(action, document, new={"retry": True, "status": document.ocr_status}, claim_id=claim.id)
     db.session.commit()
+    document = processing_document(*identity)
     return {"document": document_json(document, include_text=True), "claim": workflow_json(claim)}
 
 

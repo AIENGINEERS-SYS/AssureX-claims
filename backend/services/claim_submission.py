@@ -13,7 +13,7 @@ from backend.db.models import Claim, ClaimSequence, Product, utcnow
 from backend.extensions import db
 from backend.security import role_required
 from .claim_storage import file_limit, storage, total_limit
-from .document_service import completeness, document_json
+from .document_service import completeness, document_json, effective_review_status
 from .evidence import required_documents
 from .products import product_json
 from .warranty_calculations import current_date, select_current_warranty
@@ -98,7 +98,7 @@ def validation_errors(claim, *, verify_files=False):
             errors.setdefault("documents", []).append("A file exceeds 10 MB.")
         if document.ocr_status in {"pending", "processing"}:
             errors.setdefault("documents", []).append("Document processing is still in progress.")
-        if document.review_status == "pending":
+        if effective_review_status(document) == "pending":
             errors.setdefault("documents", []).append(
                 f"Review the extracted information for {document.original_filename}.")
         if verify_files:
