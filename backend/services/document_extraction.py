@@ -90,7 +90,7 @@ def _price_result(text: str):
             if amount < 0 or amount > Decimal("9999999999.99"):
                 continue
             number = int(amount) if amount == amount.to_integral() else float(amount)
-            return _found(number, 0.94 if line in prioritized else 0.76, currency="NGN", raw=match.group(0))
+            return _found(number, 0.94 if line in prioritized else 0.76, currency="NGN" if match.group(1) or match.group(3) else None, raw=match.group(0))
     return _empty()
 
 
@@ -107,25 +107,32 @@ def _warranty_result(text: str):
 
 
 def extract_fields(raw_text: str, document_type: str) -> dict:
-    """Return all supported fields without inventing absent or ambiguous values."""
+    """Run only the extractors applicable to this explicitly selected category."""
     text = normalize_text(raw_text)
     lines = text.splitlines()
-    result = {field: _empty() for field in FIELDS}
-    date_source, _ = _value_after_label(lines, LABELS["purchase_date"])
-    result["purchase_date"] = _date_result(date_source or text)
+    from .evidence import applicable_fields
+    allowed = applicable_fields(document_type)
+    result = {field: _empty() for field in allowed}
+    if "purchase_date" in allowed:
+        date_source, _ = _value_after_label(lines, LABELS["purchase_date"])
+        result["purchase_date"] = _date_result(date_source or text)
     for field in ("invoice_number", "product_name", "model_number", "serial_number", "retailer"):
+        if field not in allowed:
+            continue
         value, confidence = _value_after_label(lines, LABELS[field])
         if value:
             value = value.strip(" :#-")[:200]
             if value:
                 result[field] = _found(value, confidence)
-    # Receipts sometimes place the merchant in the first prominent line without a label.
-    if result["retailer"]["value"] is None and document_type in {"receipt", "invoice"} and lines:
+    # Only purchase evidence can infer a merchant from an unlabelled first line.
+    if "retailer" in allowed and result["retailer"]["value"] is None and lines:
         first = lines[0]
         if 2 <= len(first) <= 120 and not re.search(r"invoice|receipt|tax", first, re.I):
             result["retailer"] = _found(first, 0.66)
-    result["purchase_price"] = _price_result(text)
-    result["warranty_duration"] = _warranty_result(text)
+    if "purchase_price" in allowed:
+        result["purchase_price"] = _price_result(text)
+    if "warranty_duration" in allowed:
+        result["warranty_duration"] = _warranty_result(text)
     return result
 
 

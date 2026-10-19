@@ -2,8 +2,10 @@
 import calendar
 import re
 from datetime import date
+from flask import current_app, has_app_context
 
 from backend.services.document_service import public_document_type
+from backend.services.evidence import applicable_fields
 
 
 def normalized(value):
@@ -103,7 +105,13 @@ class ClaimRuleEngine:
             f"Found {len(contradictions)} material contradiction(s)." if contradictions else
             "No material contradictions were found.", {"findings": contradictions}))
 
-        missing = sorted(set(required_documents) - set(document_types))
+        # Stored registration replaces repeat receipts/identity photos; retain
+        # every other policy-specific evidence requirement.
+        from backend.services.evidence import required_documents as submission_requirements
+        waived = {"receipt", "serial_number_image"} - set(submission_requirements(claim))
+        if "invoice" in document_types:
+            waived.add("receipt")
+        missing = sorted(set(required_documents) - set(document_types) - waived)
         results.append(self._result("missing_documents", "Required documents", "evidence",
             "manual_review" if missing else "passed", "medium" if missing else "info",
             "Mandatory evidence is missing." if missing else "All mandatory evidence is available.",
@@ -140,10 +148,26 @@ class ClaimRuleEngine:
     @staticmethod
     def _document_evidence(documents):
         rows = []
+        threshold = current_app.config["OCR_HIGH_CONFIDENCE_THRESHOLD"] if has_app_context() else 0.85
         for document in documents:
             values = document.verified_data or document.extracted_data or {}
             if isinstance(values, dict):
-                rows.append((f"document:{document.id}:{document.document_type}", values))
+                normalized = {}
+                for field, item in values.items():
+                    if field not in applicable_fields(document.document_type):
+                        continue
+                    if isinstance(item, dict):
+                        if "confirmed_value" in item:
+                            value = item["confirmed_value"]
+                        elif float(item.get("confidence", 0)) >= threshold:
+                            value = item.get("value")
+                        else:
+                            continue  # Uncertain AI observations cannot invalidate coverage.
+                    else:
+                        value = item  # Backward-compatible, historical reviewed records.
+                    if value not in (None, ""):
+                        normalized[field] = value
+                rows.append((f"document:{document.id}:{document.document_type}", normalized))
         return rows
 
     @staticmethod

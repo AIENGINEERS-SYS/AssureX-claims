@@ -9,7 +9,7 @@ FAULT_TYPES = ("Mechanical Failure", "Electrical Failure", "Software Issue", "Ma
 DAMAGE_CATEGORIES = ("Minor", "Moderate", "Severe", "Total Loss")
 DOCUMENT_TYPES = ("receipt", "invoice", "product_image", "serial_number_image", "damage_evidence",
                   "fault_evidence", "warranty_card", "diagnostic_report", "repair_report", "other")
-REQUIRED_DOCUMENTS = ("receipt", "product_image", "serial_number_image", "damage_evidence")
+REQUIRED_DOCUMENTS = ("product_image", "damage_evidence")
 
 
 def past_date(value):
@@ -49,13 +49,29 @@ class SubmitSchema(StrictSchema):
     version = fields.Integer(required=True, strict=True, validate=validate.Range(min=1))
 
 
-class UploadSchema(StrictSchema):
+class EvidenceUploadSchema(StrictSchema):
+    @pre_load
+    def normalize_category(self, data, **kwargs):
+        from backend.services.evidence import CATEGORY_TYPES, category
+        result = dict(data)
+        selected = result.pop("evidence_category", None)
+        if selected is not None:
+            if selected not in CATEGORY_TYPES:
+                raise ValidationError({"evidence_category": ["Unsupported evidence category."]})
+            kind = result.get("document_type")
+            if kind and category(kind) != selected:
+                raise ValidationError({"evidence_category": ["Category conflicts with document type."]})
+            result.setdefault("document_type", CATEGORY_TYPES[selected])
+        return result
+
+
+class UploadSchema(EvidenceUploadSchema):
     draft_id = fields.Integer(required=True, validate=validate.Range(min=1))
     version = fields.Integer(required=True, validate=validate.Range(min=1))
     document_type = fields.String(required=True, validate=validate.OneOf(DOCUMENT_TYPES))
 
 
-class ClaimUploadSchema(StrictSchema):
+class ClaimUploadSchema(EvidenceUploadSchema):
     version = fields.Integer(required=True, validate=validate.Range(min=1))
     document_type = fields.String(required=True, validate=validate.OneOf(DOCUMENT_TYPES))
 

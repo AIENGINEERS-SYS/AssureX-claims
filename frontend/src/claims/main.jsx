@@ -60,7 +60,7 @@ function ClaimDetails() {
   return <>{error && <p role="alert" className="error">{error}</p>}{claim ? <><div className="confirmation"><p className="eyebrow">WE HAVE YOUR CLAIM</p><h1>{claim.claim_id}</h1>
     <p>Status: <strong>{claim.status.replaceAll('_', ' ')}</strong></p><p>Submitted {claim.submitted_at ? new Date(claim.submitted_at).toLocaleString() : claim.submission_date || 'Previously'}</p>
     <Link to="/">Back to my claims</Link></div>{claim.status === 'ADDITIONAL_INFORMATION_REQUIRED' && <div className="panel"><p>Additional evidence was requested. Upload it here for your reviewer.</p>
-      <DocumentsStep documents={claim.documents} upload={upload} review={review} retry={retry} progress={progress} busy={busy} policy={claim.document_policy} canRemove={false}/></div>}
+      <DocumentsStep documents={claim.documents} upload={upload} review={review} retry={retry} progress={progress} busy={busy} policy={claim.document_policy} required={claim.document_policy?.required_types} canRemove={false}/></div>}
     <div className="panel"><ReviewStep claim={claim} product={claim.product} values={claim}/></div></> : !error && <p role="status">Loading claim…</p>}</>;
 }
 

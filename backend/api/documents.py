@@ -60,7 +60,8 @@ def upload_to_claim(claim, data, upload):
     cross_claim = duplicate_on_other_claim(digest, claim.id)
     key = storage_key(claim.id, suffix)
     document = Document(claim=claim, uploaded_by=current_user.id,
-        document_type=stored_document_type(data["document_type"]), original_filename=name,
+        document_type=stored_document_type(data["document_type"]), product_id=claim.product_id,
+        warranty_id=claim.warranty_id, original_filename=name,
         stored_filename=key.rsplit("/", 1)[-1], mime_type=mime, file_size=len(content),
         storage_path=key, file_hash=digest, upload_status="stored", ocr_status="pending",
         review_status="pending", cross_claim_duplicate=cross_claim)
@@ -182,8 +183,17 @@ def review_ocr(document_id):
     data = body(OCRReviewSchema())
     document = accessible_document(document_id)
     claim = document.claim
-    if document.ocr_status in {"pending", "processing", "failed"}:
+    if document.ocr_status in {"pending", "processing"}:
         raise Conflict("OCR must finish successfully before extracted information can be confirmed.")
+    from backend.services.evidence import applicable_fields
+    allowed = set(applicable_fields(document.document_type))
+    if not allowed:
+        from marshmallow import ValidationError
+        raise ValidationError({"document": ["This evidence has no purchase fields to confirm."]})
+    extras = set(data) - allowed - {"version", "confirm", "warranty_duration_unit"}
+    if extras or ("warranty_duration_unit" in data and "warranty_duration" not in allowed):
+        from marshmallow import ValidationError
+        raise ValidationError({"document": ["Correction fields do not apply to this evidence category."]})
     _lock_review_claim(claim, data.pop("version"))
     data.pop("confirm")
     corrected = review_document(document, data, current_user.id)
@@ -213,7 +223,7 @@ def retry_ocr(document_id):
     _lock_review_claim(claim, data["version"])
     content = storage().open(document.storage_path)
     audit("ocr_started", document, new={"retry": True}, claim_id=claim.id)
-    action = process_document(document, content)
+    action = process_document(document, content, force=True)
     audit(action, document, new={"retry": True, "status": document.ocr_status}, claim_id=claim.id)
     db.session.commit()
     return {"document": document_json(document, include_text=True), "claim": workflow_json(claim)}

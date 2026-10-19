@@ -66,7 +66,7 @@ The migration initializes existing products as active. `Product.is_active` is en
 
 JWT verification uses the existing persisted-session, revocation and current-user checks. Creating/editing/uploading/submitting is strictly customer-only, even for administrators. Product and claim lookups always scope to the current customer. Authenticated customer document downloads use existing ownership checks. Staff permissions remain unchanged.
 
-Draft creation accepts incomplete input. Provided dates must be valid and not future UTC dates; provided enum values must be allowlisted. Draft descriptions can be shorter than 20 characters while being written, but cannot exceed 2000. Repair history cannot exceed 1000. On final submission all required fields, description minimum, product ownership/activity and all four required evidence categories are checked again. The server verifies stored file sizes and hashes before committing the submission timestamp and ID.
+Draft creation accepts incomplete input. Provided dates must be valid and not future UTC dates; provided enum values must be allowlisted. Draft descriptions can be shorter than 20 characters while being written, but cannot exceed 2000. Repair history cannot exceed 1000. On final submission all required fields, description minimum, product ownership/activity and the applicable evidence requirements are checked again. The server verifies stored file sizes and hashes before committing the submission timestamp and ID.
 
 Text is Unicode-normalized, trimmed and stripped of control characters (except newline/tab). React renders it as text, including HTML-looking strings; do not later interpolate it into raw HTML. Marshmallow rejects unknown fields, preventing changes to ownership/status/timestamps through customer input. Database queries use bound SQLAlchemy parameters.
 
@@ -78,7 +78,7 @@ Draft/product selection, edits, upload/removal and submission produce append-onl
 
 ## Upload storage and limits
 
-Uploads accept one file per request, up to 10 MiB (10 × 1024² bytes), and 50 MiB total per claim. Flask permits 11 MiB requests to allow multipart overhead around a full 10 MiB file. Required categories are `receipt`, `product_image`, `serial_number_image`, `damage_evidence`; optional categories are `warranty_card`, `diagnostic_report`, `repair_report`. Multiple files per category are allowed within the total limit.
+Uploads accept one file per request, up to 10 MiB (10 × 1024² bytes), and 50 MiB total per claim. Flask permits 11 MiB requests to allow multipart overhead around a full 10 MiB file. Required categories are `product_image` and `damage_evidence`. Receipt/invoice and serial labels are conditional on missing registration data; `warranty_card`, `diagnostic_report`, `repair_report` and `other` are optional. Multiple files per category are allowed within the total limit.
 
 The extension and submitted MIME must agree; Pillow then parses and verifies JPEG/PNG data, and pypdf parses PDFs. Truncated/spoofed images, encrypted PDFs, active PDF actions/scripts/embedded attachments, PDFs over 100 pages, overly complex PDF object graphs and images over 25 million pixels are rejected. Files are never served as executable or inline content; downloads use authenticated attachment responses with `nosniff`. Format validation is not a malware scanner; production deployments may add a quarantine/scanning stage according to their threat model.
 
@@ -149,7 +149,7 @@ Content-Type: application/json
 }
 ```
 
-Use the returned `claim.version` on the next mutation. Upload each required category:
+Use the returned `claim.version` on the next mutation. Upload each category in `claim.document_policy.required_types`; for example, an optional receipt:
 
 ```bash
 curl -X POST http://localhost:5000/api/claims/upload \
@@ -203,3 +203,83 @@ python -m pytest -q tests/test_claim_browser.py
 The browser test covers login, product selection, detail validation, autosave/resume, document uploads, review, confirmation and mobile layout. Browser artifacts are stored under `.pytest_cache`.
 
 Atomic upsert behavior follows the [SQLAlchemy SQLite documentation](https://docs.sqlalchemy.org/en/20/dialects/sqlite.html). PDF parsing uses the [pypdf reader API](https://pypdf.readthedocs.io/en/6.13.0/modules/PdfReader.html).
+
+## Context-aware claim evidence
+
+Select a registered product, describe the incident, add a product photograph and
+one or more damage photographs, then review and submit. Registered purchase,
+identity and warranty information is reused from the server. Receipts and serial
+label photographs are requested only when the corresponding registration data is
+missing; an invoice satisfies the receipt requirement. Coverage and ownership
+checks remain separate from upload completeness. Missing optional invoice data
+never blocks a claim.
+
+Upload contracts remain backward-compatible (`document_type`, `version`, `file`
+in multipart form data). Alternatively supply `evidence_category`; conflicting
+category/type combinations are rejected rather than silently reclassified.
+
+| Evidence category | Existing document type | Processing |
+| --- | --- | --- |
+| PURCHASE_RECEIPT | receipt, invoice | Purchase OCR and human confirmation |
+| PRODUCT_IMAGE | product_image | Image quality, visual provider when configured, visible identity-label OCR |
+| DAMAGE_EVIDENCE | damage_evidence (stored as fault_evidence) | Image quality and visual provider when configured; no purchase OCR |
+| SERIAL_NUMBER_LABEL | serial_number_image | Model/serial OCR |
+| WARRANTY_DOCUMENT | warranty_card | Model/serial and warranty-duration OCR |
+| OTHER | other, diagnostic_report, repair_report | Private attachment storage, no forced purchase extraction |
+
+Responses add `evidence_id`, `evidence_category`, `processing_status`,
+`applicable_fields`, `validation_warnings`, `analysis`, and `metadata_conflicts`.
+`document_policy.required_types` is the authoritative list for the selected
+product; `document_completeness.missing` accounts for already supplied documents.
+Each attachment retains independent persistent processing results. Processing is
+synchronous; the public states currently emitted are UPLOADED, PROCESSING,
+COMPLETED, NEEDS_REVIEW and FAILED. There is no background queue in this change.
+
+Review uses `PATCH /api/documents/:id/ocr-review` with the current claim version,
+`confirm: true`, and only fields applicable to that category. Failed OCR permits
+manual correction. Retry uses `POST /api/documents/:id/ocr/retry`; confirmed values
+and provenance survive both failed and successful retries. New supplementary
+confirmed metadata is retained on the product and reused by subsequent claims.
+Existing registered values and confirmations from other evidence are preserved;
+conflicts are shown for review. Product identity changes use the existing product
+management flow, not implicit OCR updates.
+
+Mutations use the existing optimistic claim-version lock. The wizard serializes
+uploads and saves; simultaneous independent API writers receive a 409 on a stale
+version and must reload before retrying. Duplicate file hashes are rejected with
+`duplicate_document` and cannot create another attachment. Repeating processing
+of an already processed attachment is a no-op unless an explicit retry is used.
+Submitting an already submitted draft returns its existing claim identifier.
+
+### Visual assessment limitations
+
+The repository's GTM classifier evaluates generated claim cards, not photographic
+damage. It is not used to invent brands, damage categories, affected components or
+severity. The built-in photo processor measures dimensions/brightness and reports
+manual review when a photographic model is unavailable. A deployment can register
+`app.extensions['evidence_vision']` with an `assess(content, mime, category)` method
+returning `fields` (field observations with value/confidence), `warnings`,
+`provider`, `version` and `needs_review`. This is an integration boundary; no new
+trained visual model or paid external provider is supplied. Warranty-document OCR
+currently extracts duration and visible model/serial labels; free-text coverage
+terms, exclusions and warranty-date interpretation remain manual review.
+
+### Upgrade and verify
+
+Run the additive migration before starting the updated application:
+
+```bash
+python -m flask --app backend:create_app db upgrade
+python -m pytest -q tests/test_claim_submission.py tests/test_document_ocr.py tests/test_evidence_workflow.py tests/test_document_migrations.py tests/test_migration_heads.py
+npm ci --prefix frontend
+npm run test:evidence --prefix frontend
+npm run build --prefix frontend
+```
+
+The two new JSON columns are nullable, preserve existing product/claim rows, and
+retain attachment provenance. Legacy claim attachments are linked to their
+existing product/warranty during migration. Real OCR tests use Tesseract when
+installed; no photographic model inference is claimed. For the opt-in browser
+journey, use the existing `ASSUREX_BROWSER_TESTS=1` instructions above. The browser
+scenario covers photographs without a repeat receipt, draft re-entry, review,
+submission and mobile layout.

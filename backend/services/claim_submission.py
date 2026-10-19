@@ -8,12 +8,13 @@ from marshmallow import ValidationError
 from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 from werkzeug.exceptions import Conflict, Forbidden, NotFound
-from backend.api.claim_schemas import DraftSchema, REQUIRED_DOCUMENTS
+from backend.api.claim_schemas import DraftSchema
 from backend.db.models import Claim, ClaimSequence, Product, utcnow
 from backend.extensions import db
 from backend.security import role_required
 from .claim_storage import file_limit, storage, total_limit
 from .document_service import completeness, document_json
+from .evidence import required_documents
 from .products import product_json
 from .warranty_calculations import current_date, select_current_warranty
 
@@ -85,7 +86,7 @@ def validation_errors(claim, *, verify_files=False):
             selected_product(claim.product_id)
         except ValidationError as exc:
             errors.update(exc.messages)
-    document_state = completeness(claim, REQUIRED_DOCUMENTS)
+    document_state = completeness(claim, required_documents(claim))
     if document_state["missing"]:
         errors["documents"] = ["Upload: " + ", ".join(sorted(document_state["missing"])) + "."]
     if sum(d.file_size for d in claim.documents) > total_limit():
@@ -142,8 +143,8 @@ def workflow_json(claim):
         "server_date": current_date().isoformat(),
         "product": product_json(claim.product, current_date()) if claim.product else None,
         "documents": [document_json(d) for d in claim.documents],
-        "document_completeness": completeness(claim, REQUIRED_DOCUMENTS),
-        "document_policy": {"allowed_extensions": ["pdf", "jpg", "jpeg", "png"],
+        "document_completeness": completeness(claim, required_documents(claim)),
+        "document_policy": {"required_types": required_documents(claim), "allowed_extensions": ["pdf", "jpg", "jpeg", "png"],
             "max_document_size_mb": current_app.config["MAX_DOCUMENT_SIZE_MB"],
             "max_documents_per_claim": current_app.config["MAX_DOCUMENTS_PER_CLAIM"],
             "max_claim_upload_size_mb": current_app.config["MAX_CLAIM_UPLOAD_SIZE_MB"]}}

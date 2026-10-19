@@ -10,12 +10,13 @@ from backend.db.models import Claim, Product, utcnow
 from backend.extensions import db
 from backend.services.claim_storage import storage
 from backend.services.document_service import completeness
+from backend.services.evidence import required_documents
 from backend.services.notifications import NotificationService
 from backend.services.claim_submission import (apply_draft, customer_only, document_json, lock_draft,
     next_claim_id, owned_claim, validation_errors, workflow_json)
 from backend.services.products import product_json
 from backend.services.warranty_calculations import current_date
-from .claim_schemas import DraftSchema, DraftUpdateSchema, REQUIRED_DOCUMENTS, SubmitSchema, UploadSchema
+from .claim_schemas import DraftSchema, DraftUpdateSchema, SubmitSchema, UploadSchema
 from .common import audit, page
 from .schemas import body
 
@@ -104,7 +105,7 @@ def submit():
     lock_draft(claim, data["version"])
     errors = validation_errors(claim, verify_files=True)
     if errors:
-        missing = completeness(claim, REQUIRED_DOCUMENTS)["missing"]
+        missing = completeness(claim, required_documents(claim))["missing"]
         if missing:
             # Persist the actionable alert without committing the optimistic-lock
             # version bump made by lock_draft().

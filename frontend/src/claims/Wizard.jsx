@@ -16,9 +16,9 @@ export default function Wizard() {
   const [claim, setClaim] = useState(null), [products, setProducts] = useState([]), [step, setStep] = useState(1);
   const [error, setError] = useState(''), [status, setStatus] = useState('Loading…'), [busy, setBusy] = useState(false), [progress, setProgress] = useState(null);
   const current = useRef(null), chain = useRef(Promise.resolve()), saved = useRef(''), latest = useRef({values, step});
-  const blocked = useRef(false), alive = useRef(true);
+  const blocked = useRef(false), alive = useRef(true), pending = useRef(0);
   latest.current = {values, step};
-  const selected = products.find(p => p.id === Number(values.product_id));
+  const selected = claim?.product?.id === Number(values.product_id) ? claim.product : products.find(p => p.id === Number(values.product_id));
 
   useEffect(() => {
     alive.current = true;
@@ -53,7 +53,7 @@ export default function Wizard() {
   }
   function failed(err) {
     if (!alive.current) return;
-    if (err.response?.status === 409) blocked.current = true;
+    if (err.response?.status === 409 && err.response?.data?.error?.code !== 'duplicate_document') blocked.current = true;
     setError(errorMessage(err)); setStatus('Changes not saved');
     for (const [name, messages] of Object.entries(err.response?.data?.error?.details || {})) {
       if (name in defaults) form.setError(name, {type: 'server', message: Array.isArray(messages) ? messages.join(' ') : String(messages)});
@@ -102,15 +102,15 @@ export default function Wizard() {
   }, []);
 
   async function run(action) {
-    setBusy(true); setError('');
-    try {await enqueue(action);} catch (err) {failed(err);} finally {if (alive.current) setBusy(false);}
+    pending.current += 1; setBusy(true); setError('');
+    try {await enqueue(action);} catch (err) {failed(err);} finally {pending.current -= 1; if (alive.current && !pending.current) setBusy(false);}
   }
   async function go(next) {
     if (next > step) {
       const fields = step === 1 ? ['product_id'] : step === 2 ? ['fault_date', 'fault_type', 'description', 'damage_category', 'repair_history'] : [];
       if (!await form.trigger(fields)) return;
-      if (step === 3 && requiredDocuments.some(type => !current.current.documents.some(d => d.document_type === type))) {
-        setError('Upload the receipt, product image, serial number image and damage evidence before continuing.'); return;
+      if (step === 3 && (current.current.document_completeness?.missing || requiredDocuments.filter(type => !current.current.documents.some(d => d.document_type === type))).length > 0) {
+        setError('Upload the required supporting evidence: ' + (current.current.document_completeness?.missing || requiredDocuments).join(', ') + '.'); return;
       }
       if (step === 3 && current.current.documents.some(document => document.review_status === 'pending')) {
         setError('Review and confirm the extracted information before continuing.'); return;
@@ -153,7 +153,7 @@ export default function Wizard() {
   function review(documentId, corrections) {
     run(async () => {
       const clean = Object.fromEntries(Object.entries(corrections).map(([key, value]) => [key, value === '' ? null : value]));
-      if (clean.warranty_duration !== null) clean.warranty_duration = Number(clean.warranty_duration);
+      if ('warranty_duration' in clean && clean.warranty_duration !== null) clean.warranty_duration = Number(clean.warranty_duration);
       const response = await api.patch(`/documents/${documentId}/ocr-review`, {...clean, confirm: true, version: current.current.version});
       accept(response.data.claim); setStatus('Extracted information confirmed');
     });
@@ -180,7 +180,7 @@ export default function Wizard() {
         {step === 1 && <ProductStep products={products} register={form.register} errors={form.formState.errors} selected={selected}/>}
         {step === 2 && <DetailsStep register={form.register} errors={form.formState.errors} today={claim.server_date} description={values.description}/>}
         {step === 3 && <DocumentsStep documents={claim.documents} upload={upload} remove={remove} review={review} retry={retry}
-          progress={progress} busy={busy} policy={claim.document_policy}/>}
+          progress={progress} busy={busy} policy={claim.document_policy} required={claim.document_policy?.required_types}/>}
         {step === 4 && <ReviewStep claim={claim} product={selected} values={values}/>}
       </fieldset><div className="actions"><button type="button" disabled={busy} onClick={() => run(async () => {await persist(form.getValues(), step); navigate('/');})}>Save and exit</button>
         <div>{step > 1 && <button type="button" disabled={busy || blocked.current} onClick={() => go(step - 1)}>Previous</button>}

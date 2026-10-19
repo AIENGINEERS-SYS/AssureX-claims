@@ -229,12 +229,8 @@ def test_serial_rule_tolerates_punctuation_and_case_differences(app, accounts):
     assert not any(c["type"] == "serial_number_mismatch" for c in contradictions)
 
 
-def test_serial_rule_reads_ocr_containers_as_whole_values(app, accounts):
-    """Pins current behaviour: stored OCR containers are compared verbatim.
-
-    ``ClaimRuleEngine._document_evidence`` hands the raw per-field container to the
-    comparison, so a reviewed serial number never equals the registered serial.
-    """
+def test_serial_rule_compares_confirmed_value_inside_ocr_containers(app, accounts):
+    """A confirmed serial matching registration must pass identity verification."""
     ids = seed_claim(app, user_id=accounts["customer"], serial="SN-REGISTERED")
     add_document(app, ids["claim"], accounts["customer"], "serial_number_image",
                  verified={"serial_number": confirmed_field("SN-REGISTERED")})
@@ -243,7 +239,7 @@ def test_serial_rule_reads_ocr_containers_as_whole_values(app, accounts):
     assert set(sources) == {"registered_product"} | {
         key for key in sources if key.startswith("document:")}
     assert isinstance(sources["registered_product"], str)
-    assert rules["serial_number_verification"]["result"] == "failed"
+    assert rules["serial_number_verification"]["result"] == "passed"
 
 
 def test_serial_rule_ignores_blank_ocr_values(app, accounts):
@@ -275,8 +271,7 @@ def test_missing_documents_lists_every_absent_required_type(app, accounts):
     rule = rules["missing_documents"]
     assert rule["result"] == "manual_review"
     assert rule["severity"] == "medium"
-    assert set(rule["evidence"]["missing_documents"]) == {"serial_number_image", "product_image",
-                                                          "damage_evidence"}
+    assert set(rule["evidence"]["missing_documents"]) == {"product_image", "damage_evidence"}
     assert rule["evidence"]["submitted_documents"] == ["receipt"]
     assert set(rule["evidence"]["optional_documents"]) == {"warranty_card", "diagnostic_report",
                                                            "repair_report"}
@@ -288,7 +283,7 @@ def test_missing_documents_with_no_documents_at_all(app, accounts):
     rule = rules["missing_documents"]
     assert rule["result"] == "manual_review"
     assert rule["evidence"]["submitted_documents"] == []
-    assert len(rule["evidence"]["missing_documents"]) == 4
+    assert set(rule["evidence"]["missing_documents"]) == {"product_image", "damage_evidence"}
 
 
 def test_missing_documents_is_inclusive_optional_documents_do_not_satisfy_required(app, accounts):

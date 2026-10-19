@@ -82,5 +82,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
+      - name: Verify evidence category rendering
+        run: npm run test:evidence --prefix frontend
       - name: Build frontend
         run: npm run build --prefix frontend
