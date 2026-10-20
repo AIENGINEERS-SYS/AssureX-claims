@@ -40,8 +40,8 @@ export async function runClaims({baseURL, call, click, fill, wait, has, evaluate
   await button('Next');
   await wait(has('h2', 'Add supporting documents'));
   await button('Next');
-  await wait(has('.error', 'Upload the receipt'));
-  for (const type of ['receipt', 'product_image', 'serial_number_image', 'damage_evidence']) {
+  await wait(has('.error', 'Upload the required supporting evidence'));
+  for (const type of ['product_image', 'damage_evidence']) {
     await wait(`!document.querySelector('#upload-${type}').disabled`);
     await evaluate(`(async () => {
       const canvas=document.createElement('canvas'); canvas.width=8; canvas.height=8;
@@ -55,6 +55,15 @@ export async function runClaims({baseURL, call, click, fill, wait, has, evaluate
     })()`);
     await wait(`document.body.textContent.includes('${type}.png') && !document.querySelector('#upload-${type}').disabled`);
   }
+  // Product/damage sections never show receipt extraction inputs.
+  await evaluate("Array.from(document.querySelectorAll('.ocr-panel')).forEach(panel=>panel.open=true)");
+  await pause(300);
+  assert.equal(await evaluate(`document.querySelectorAll('input[id$="-invoice_number"],input[id$="-retailer"],input[id$="-purchase_date"]').length`), 0);
+  await button('Save and exit');
+  await wait(has('h1', 'My claims'));
+  await click('a[href^="/claims/draft/"]');
+  await wait(has('h2', 'Add supporting documents'));
+  assert.equal(await evaluate("document.querySelectorAll('.document-result').length"), 2);
   await button('Next');
   await wait(has('h2', 'Review your claim'));
   assert.ok(await evaluate(`document.body.textContent.includes(${JSON.stringify(description)})`));

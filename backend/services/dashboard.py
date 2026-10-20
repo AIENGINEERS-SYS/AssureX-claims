@@ -4,12 +4,13 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from flask import current_app
 from sqlalchemy import and_, case, func, or_, select, union_all
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, selectinload
 from backend.db.models import (Claim, Document, DuplicateInvestigation, GTMPrediction,
     ModelVersion, Notification, Product, PythonPrediction, Review, RuleResult, User, Warranty)
 from backend.extensions import db
 from backend.api.claim_schemas import REQUIRED_DOCUMENTS
 from .document_service import public_document_type, stored_document_type
+from .evidence import required_documents
 from .warranty_calculations import current_date
 
 WINDOWS = {"7d": 7, "30d": 30, "90d": 90, "12m": 365}
@@ -181,6 +182,16 @@ def reviewer_dashboard(user_id, admin=False, page=1, per_page=10, search=""):
         scope, disagreement_condition(py, gtm)).order_by(Claim.submitted_at.desc()).limit(10)).all()
     missing_filters = [~select(Document.id).where(Document.claim_id == Claim.id,
         Document.document_type == stored_document_type(kind)).exists() for kind in REQUIRED_DOCUMENTS]
+    registered_purchase = select(Product.id).where(Product.id == Claim.product_id,
+        Product.purchase_date.is_not(None), func.length(func.trim(Product.retailer)) > 0,
+        Product.purchase_price.is_not(None)).exists()
+    registered_identity = select(Product.id).where(Product.id == Claim.product_id,
+        func.length(func.trim(Product.serial_number)) > 0, func.length(func.trim(Product.model_number)) > 0).exists()
+    receipt = select(Document.id).where(Document.claim_id == Claim.id,
+        Document.document_type.in_(("receipt", "invoice"))).exists()
+    serial = select(Document.id).where(Document.claim_id == Claim.id,
+        Document.document_type == "serial_number_image").exists()
+    missing_filters.extend([and_(~registered_purchase, ~receipt), and_(~registered_identity, ~serial)])
     ids = [row.id for row in db.session.execute(select(Claim.id).where(scope, or_(*missing_filters)).
         order_by(Claim.submitted_at.desc()).limit(10))]
     uploaded = defaultdict(set)
@@ -188,6 +199,12 @@ def reviewer_dashboard(user_id, admin=False, page=1, per_page=10, search=""):
         for claim_id, kind in db.session.execute(select(Document.claim_id, Document.document_type).where(
                 Document.claim_id.in_(ids))):
             uploaded[claim_id].add(public_document_type(kind))
+    if ids:
+        for types in uploaded.values():
+            if "invoice" in types:
+                types.add("receipt")
+    required = {claim.id: set(required_documents(claim)) for claim in db.session.scalars(
+        select(Claim).where(Claim.id.in_(ids)).options(selectinload(Claim.product)))} if ids else {}
     pair = duplicate_pairs(None if admin else user_id)
     decision = aliased(DuplicateInvestigation)
     first_claim, second_claim = aliased(Claim), aliased(Claim)
@@ -227,7 +244,7 @@ def reviewer_dashboard(user_id, admin=False, page=1, per_page=10, search=""):
             "python": {"class": r[2], "confidence": float(r[3])},
             "gtm": {"class": r[4], "confidence": float(r[5])},
             "recommended_action": "Inspect evidence"} for r in disagreements],
-        "missing_documents": [{"claim_id": cid, "missing": sorted(set(REQUIRED_DOCUMENTS) - uploaded[cid])}
+        "missing_documents": [{"claim_id": cid, "missing": sorted(required[cid] - uploaded[cid])}
             for cid in ids],
         "duplicates": [{"claim_id": r.claim_id, "matching_claim_id": r.matching_claim_id,
             "file_hash": r.file_hash, "similarity_score": 1.0, "risk_level": "Exact file match",

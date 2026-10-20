@@ -241,6 +241,10 @@ def test_full_upload_ocr_review_and_submit_integration(client, headers, claims, 
             filename=f"{kind}.png")
         assert uploaded.status_code == 201, uploaded.json
         claim, document = uploaded.json["claim"], uploaded.json["document"]
+        if kind == "damage_evidence":
+            assert document["applicable_fields"] == []
+            assert document["review_status"] == "not_required"
+            continue
         reviewed = client.patch(f"/api/documents/{document['id']}/ocr-review", headers=headers,
             json={"version": claim["version"], "confirm": True})
         assert reviewed.status_code == 200, reviewed.json

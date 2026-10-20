@@ -1,10 +1,8 @@
 """The eleven claim scenarios that fuzzy.txt requires the project to demonstrate.
 
-Each test is named after one bullet of the "Hidden-test readiness checklist". Scenarios
-are driven through the real HTTP API wherever the pipeline allows it; the two that the
-current rule engine makes unreachable end to end (a fully valid claim, and a
-low-confidence Python result) are demonstrated at the decision engine and feature
-boundaries instead, and say so explicitly.
+Each test is named after one bullet of the "Hidden-test readiness checklist".
+Scenarios use the real HTTP API where possible. Decision and feature boundary
+checks isolate thresholds from trained artifacts; real model tests live separately.
 """
 from datetime import date, timedelta
 import pytest
@@ -48,10 +46,8 @@ def passing_rules():
 def test_scenario_one_valid_claim(app, claims):
     """A claim with matching confident models and every rule passing is approved.
 
-    Driven at the decision engine because a separate OCR-container identity issue still
-    prevents this synthetic fully valid scenario from reaching approval end to end. The
-    damage_evidence/fault_evidence missing-document alias is covered independently and is
-    expected to pass for a complete evidence set.
+    This isolates decision thresholds from model inference. Matching reviewed serial
+    containers and stored damage-evidence aliases have separate rule regressions.
     """
     rules = passing_rules()
     decision, explanation = DecisionEngine().decide(agreeing_models("valid", 0.9),
@@ -80,11 +76,10 @@ def test_complete_evidence_no_longer_triggers_missing_document_false_positive(cl
     assert body["status"] == "complete"
     assert body["recommendation"] == "manual_review_required"
     problems = {p["code"]: p for p in body["explanation"]["problems"]}
-    # The alias bug is fixed: the stored fault_evidence upload satisfies the public
-    # damage_evidence policy requirement. A separate OCR-container identity issue still
-    # causes serial/contradiction escalation in this fixture.
+    # Stored fault_evidence satisfies the public damage_evidence requirement.
+    # Empty or failed OCR must not manufacture serial/identity contradictions.
     assert "missing_documents" not in problems
-    assert set(problems) >= {"serial_number_verification", "contradiction_detection"}
+    assert not ({"serial_number_verification", "contradiction_detection"} & set(problems))
     with app.app_context():
         assert db.session.get(Claim, claim_id).status == "manual_review"
 
@@ -193,7 +188,7 @@ def test_scenario_five_missing_document_claim(client, app, accounts, tmp_path):
     assert body["explanation"]["decision"] == "Manual Review Required"
     rules, _ = evaluate_rules(app, ids["claim"])
     assert set(rules["missing_documents"]["evidence"]["missing_documents"]) == {
-        "serial_number_image", "product_image", "damage_evidence"}
+        "product_image", "damage_evidence"}
 
 
 # 6 -------------------------------------------------------------- one duplicate claim

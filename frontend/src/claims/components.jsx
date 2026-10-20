@@ -6,7 +6,7 @@ export const faultTypes = ['Mechanical Failure', 'Electrical Failure', 'Software
 export const damageCategories = ['Minor', 'Moderate', 'Severe', 'Total Loss'];
 export const documentTypes = ['receipt', 'invoice', 'product_image', 'serial_number_image', 'damage_evidence',
   'warranty_card', 'diagnostic_report', 'repair_report', 'other'];
-export const requiredDocuments = ['receipt', 'product_image', 'serial_number_image', 'damage_evidence'];
+export const requiredDocuments = ['product_image', 'damage_evidence'];
 export const label = value => value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
 
 export function Progress({step}) {
@@ -19,7 +19,9 @@ export function ProductInfo({product}) {
   if (!product) return null;
   return <dl className="facts">{[['Product', product.name], ['Category', product.category], ['Brand', product.brand],
     ['Model number', product.model_number], ['Serial number', product.serial_number], ['Purchase date', product.purchase_date],
-    ['Warranty status', product.warranty_status]].map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>;
+    ['Retailer', product.retailer], ['Purchase price', product.purchase_price],
+    ['Invoice number', product.purchase_metadata?.invoice_number?.confirmed_value || 'Optional — not provided'],
+    ['Warranty expiry', product.warranty_expiry], ['Warranty status', product.warranty_status]].map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>;
 }
 
 export function ProductStep({products, register, errors, selected}) {
@@ -62,8 +64,8 @@ const ocrFields = ['purchase_date', 'invoice_number', 'product_name', 'model_num
   'retailer', 'purchase_price', 'warranty_duration'];
 
 function detectedValue(document, field) {
-  const reviewed = document.verified_data?.[field]?.confirmed_value;
-  if (reviewed !== undefined && reviewed !== null) return reviewed;
+  const observation = document.verified_data?.[field];
+  if (observation) return observation.confirmed_value ?? '';
   return document.extracted_data?.[field]?.value ?? '';
 }
 
@@ -73,7 +75,8 @@ function DocumentPreview({document}) {
     if (!document.file_type.startsWith('image/')) return;
     let active = true, objectUrl = '';
     api.get(`/documents/${document.id}/content`, {responseType: 'blob'}).then(({data}) => {
-      objectUrl = URL.createObjectURL(data); if (active) setUrl(objectUrl);
+      if (!active) return;
+      objectUrl = URL.createObjectURL(data); setUrl(objectUrl);
     }).catch(err => {if (active) setError(errorMessage(err));});
     return () => {active = false; if (objectUrl) URL.revokeObjectURL(objectUrl);};
   }, [document.id]);
@@ -92,8 +95,11 @@ function DocumentPreview({document}) {
 }
 
 function OCRReview({document, review, retry, busy}) {
-  const initial = Object.fromEntries(ocrFields.map(field => [field, detectedValue(document, field)]));
-  initial.warranty_duration_unit = document.verified_data?.warranty_duration?.unit ||
+  const fields = document.applicable_fields || ({receipt: ocrFields, invoice: ocrFields,
+    product_image: ['product_name', 'model_number', 'serial_number'], serial_number_image: ['model_number', 'serial_number'],
+    warranty_card: ['model_number', 'serial_number', 'warranty_duration']}[document.document_type] || []);
+  const initial = Object.fromEntries(fields.map(field => [field, detectedValue(document, field)]));
+  if (fields.includes('warranty_duration')) initial.warranty_duration_unit = document.verified_data?.warranty_duration?.unit ||
     document.extracted_data?.warranty_duration?.unit || 'months';
   const [values, setValues] = useState(initial);
   const [expanded, setExpanded] = useState(false), [raw, setRaw] = useState(document.ocr_raw_text || '');
@@ -106,12 +112,19 @@ function OCRReview({document, review, retry, busy}) {
       catch { /* The main API error area handles mutation failures; preview remains optional. */ }
     }
   }
-  return <details className="ocr-panel" onToggle={toggle}><summary>Document analysis · {status}</summary>
+  return <details className="ocr-panel" onToggle={toggle}><summary>{label(document.document_type)} analysis · {document.processing_status ? label(document.processing_status.toLowerCase()) : status}</summary>
     {expanded && <DocumentPreview document={document}/>}
+    {(document.validation_warnings || []).map((message, index) => <p className="hint" key={index}>{message}</p>)}
+    {(document.metadata_conflicts || []).map(item => <p className="field-error" key={item.field}>Review {label(item.field)}: the observation differs from your registered product. Your saved information has been preserved.</p>)}
+    {document.analysis?.quality && <p className="hint">Image resolution: {document.analysis.quality.width} × {document.analysis.quality.height}</p>}
+    {document.document_type === 'other' && <p>Attachment stored securely.</p>}
+    {document.document_type === 'damage_evidence' && !document.validation_warnings?.length && document.ocr_status === 'completed' && <p>Damage assessment is complete.</p>}
+    {Object.entries(document.analysis?.fields || {}).map(([field, item]) => <p key={field}>{label(field)}: {String(item.value ?? 'Uncertain')}</p>)}
     {document.ocr_status === 'failed' ? <div className="ocr-failure"><p>{document.ocr_error || 'Analysis failed.'}</p>
-      <button type="button" disabled={busy} onClick={() => retry(document.id)}>Retry analysis</button></div> : <>
+      <button type="button" disabled={busy} onClick={() => retry(document.id)}>Retry analysis</button></div> : null}
+    {fields.length > 0 && <>
       <p className="hint">Extracted automatically. Check every detected value before confirming.</p>
-      <div className="ocr-grid">{ocrFields.map(field => {
+      <div className="ocr-grid">{fields.map(field => {
         const extraction = document.extracted_data?.[field] || {};
         const inputType = field === 'purchase_date' ? 'date' : field === 'purchase_price' || field === 'warranty_duration' ? 'number' : 'text';
         return <div key={field}><label htmlFor={`ocr-${document.id}-${field}`}>{label(field)}</label>
@@ -128,20 +141,21 @@ function OCRReview({document, review, retry, busy}) {
         onClick={() => review(document.id, values)}>{document.review_status === 'confirmed' ? 'Update confirmed information' : 'Save corrections and confirm'}</button>
       {raw && <details className="raw-ocr"><summary>View raw OCR text</summary><pre>{raw}</pre></details>}
     </>}
+    {(document.ocr_status === 'completed_with_warnings' || (document.can_retry && ['pending', 'processing'].includes(document.ocr_status))) && <button type="button" disabled={busy} onClick={() => retry(document.id)}>Retry analysis</button>}
   </details>;
 }
 
-export function DocumentsStep({documents, upload, remove, review, retry, progress, busy, policy, canRemove = true}) {
+export function DocumentsStep({documents, upload, remove, review, retry, progress, busy, policy, required = requiredDocuments, canRemove = true}) {
   const total = documents.reduce((sum, doc) => sum + doc.file_size, 0);
   const perFile = policy?.max_document_size_mb || 10, perClaim = policy?.max_claim_upload_size_mb || 50;
-  return <section><h2>Add supporting documents</h2><p>Drag a file into its category or use the picker, then review any extracted values. PDF, JPG, JPEG and PNG only.</p>
+  return <section><h2>Add supporting documents</h2><p>Registered purchase details are reused automatically. Add product and damage photographs below.</p><p>Drag a file into its category or use the picker, then review any extracted values. PDF, JPG, JPEG and PNG only.</p>
     <p className="hint">Up to {perFile} MB per file · {documents.length}/{policy?.max_documents_per_claim || 20} documents · {(total / 1024 / 1024).toFixed(1)} MB of {perClaim} MB used</p>
     <div className="document-grid">{documentTypes.map(type => <div className="document-slot" key={type}>
-      <label htmlFor={`upload-${type}`}>{label(type)} <span className="hint">({requiredDocuments.includes(type) ? 'required' : 'optional'})</span></label>
+      <label htmlFor={`upload-${type}`}>{label(type)} <span className="hint">({required.includes(type) ? 'required' : 'optional'})</span></label>
       <div className="drop-zone" onDragOver={event => event.preventDefault()} onDrop={event => {
-        event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) upload(type, file);
-      }}><span>Drop file here or choose</span><input id={`upload-${type}`} type="file" accept=".jpg,.jpeg,.png,.pdf" disabled={busy}
-        onChange={event => {const file = event.target.files[0]; if (file) upload(type, file); event.target.value = '';}}/>
+        event.preventDefault(); if (!busy) for (const file of event.dataTransfer.files) upload(type, file);
+      }}><span>Drop file here or choose</span><input id={`upload-${type}`} type="file" multiple accept=".jpg,.jpeg,.png,.pdf" disabled={busy}
+        onChange={event => {for (const file of event.target.files) upload(type, file); event.target.value = '';}}/>
       </div>
       {progress?.type === type && <div role="status"><progress max="100" value={progress.percent} aria-label={`${label(type)} upload progress`}/><span>{progress.percent}% uploaded</span></div>}
       {documents.filter(doc => doc.document_type === type).map(doc => <div key={doc.id} className="document-result"><div className="file-row"><span>{doc.file_name}<small>{doc.file_type} · {(doc.file_size / 1024).toFixed(1)} KB</small></span>

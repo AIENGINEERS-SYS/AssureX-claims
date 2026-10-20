@@ -2,6 +2,7 @@ import React, {useEffect, useRef, useState} from 'react';
 import {useForm, useWatch} from 'react-hook-form';
 import {Link, useNavigate, useParams} from 'react-router-dom';
 import {api, allPages, errorMessage} from './api';
+import {createMutationQueue} from './mutationQueue';
 import {DetailsStep, DocumentsStep, ProductStep, Progress, requiredDocuments, ReviewStep} from './components';
 
 const defaults = {product_id: '', fault_date: '', fault_type: '', description: '', damage_category: '', repair_history: '', previous_replacement: false};
@@ -15,10 +16,10 @@ export default function Wizard() {
   const form = useForm({defaultValues: defaults, mode: 'onTouched'}), values = useWatch({control: form.control});
   const [claim, setClaim] = useState(null), [products, setProducts] = useState([]), [step, setStep] = useState(1);
   const [error, setError] = useState(''), [status, setStatus] = useState('Loading…'), [busy, setBusy] = useState(false), [progress, setProgress] = useState(null);
-  const current = useRef(null), chain = useRef(Promise.resolve()), saved = useRef(''), latest = useRef({values, step});
-  const blocked = useRef(false), alive = useRef(true);
+  const current = useRef(null), chain = useRef(createMutationQueue()), saved = useRef(''), latest = useRef({values, step});
+  const blocked = useRef(false), alive = useRef(true), pending = useRef(0);
   latest.current = {values, step};
-  const selected = products.find(p => p.id === Number(values.product_id));
+  const selected = claim?.product?.id === Number(values.product_id) ? claim.product : products.find(p => p.id === Number(values.product_id));
 
   useEffect(() => {
     alive.current = true;
@@ -34,11 +35,32 @@ export default function Wizard() {
     return () => {cancelled = true; alive.current = false;};
   }, [id]);
 
+  const processing = claim?.documents.some(document => ['pending', 'processing'].includes(document.ocr_status));
+  useEffect(() => {
+    if (!processing || busy || blocked.current) return;
+    let active = true;
+    const timer = setInterval(async () => {
+      try {
+        const {data} = await api.get(`/claims/${id}`);
+        if (!active) return;
+        if (data.claim.version !== current.current.version) {
+          blocked.current = true;
+          setError('This draft changed in another session. Reload the saved draft before continuing.');
+          return;
+        }
+        accept(data.claim);
+      } catch { /* Session expiry is handled by the shared API client; retry polling. */ }
+    }, 2000);
+    return () => {active = false; clearInterval(timer);};
+  }, [processing, busy, id]);
+
   // All mutations share a queue and always use the latest server version.
   function enqueue(action) {
-    const next = chain.current.catch(() => {}).then(action);
-    chain.current = next;
-    return next;
+    return chain.current(() => {
+      if (!alive.current) return;
+      if (blocked.current) throw new Error('Draft must be reloaded.');
+      return action();
+    });
   }
   function accept(draft) {current.current = draft; if (alive.current) setClaim(draft);}
   async function persist(input, atStep) {
@@ -53,7 +75,7 @@ export default function Wizard() {
   }
   function failed(err) {
     if (!alive.current) return;
-    if (err.response?.status === 409) blocked.current = true;
+    if (err.response?.status === 409 && err.response?.data?.error?.code !== 'duplicate_document') blocked.current = true;
     setError(errorMessage(err)); setStatus('Changes not saved');
     for (const [name, messages] of Object.entries(err.response?.data?.error?.details || {})) {
       if (name in defaults) form.setError(name, {type: 'server', message: Array.isArray(messages) ? messages.join(' ') : String(messages)});
@@ -102,15 +124,18 @@ export default function Wizard() {
   }, []);
 
   async function run(action) {
-    setBusy(true); setError('');
-    try {await enqueue(action);} catch (err) {failed(err);} finally {if (alive.current) setBusy(false);}
+    pending.current += 1; setBusy(true); setError('');
+    try {await enqueue(action);} catch (err) {failed(err);} finally {pending.current -= 1; if (alive.current && !pending.current) setBusy(false);}
   }
   async function go(next) {
     if (next > step) {
       const fields = step === 1 ? ['product_id'] : step === 2 ? ['fault_date', 'fault_type', 'description', 'damage_category', 'repair_history'] : [];
       if (!await form.trigger(fields)) return;
-      if (step === 3 && requiredDocuments.some(type => !current.current.documents.some(d => d.document_type === type))) {
-        setError('Upload the receipt, product image, serial number image and damage evidence before continuing.'); return;
+      if (step === 3 && (current.current.document_completeness?.missing || requiredDocuments.filter(type => !current.current.documents.some(d => d.document_type === type))).length > 0) {
+        setError('Upload the required supporting evidence: ' + (current.current.document_completeness?.missing || requiredDocuments).join(', ') + '.'); return;
+      }
+      if (step === 3 && current.current.documents.some(document => ['pending', 'processing'].includes(document.ocr_status))) {
+        setError('Evidence analysis is still running. Wait for completion or retry an interrupted analysis.'); return;
       }
       if (step === 3 && current.current.documents.some(document => document.review_status === 'pending')) {
         setError('Review and confirm the extracted information before continuing.'); return;
@@ -141,6 +166,12 @@ export default function Wizard() {
       try {
         const response = await api.post(`/claims/${current.current.id}/documents`, data, {onUploadProgress: event => setProgress({type, percent: Math.round(event.loaded / (event.total || file.size) * 100)})});
         accept(response.data.claim); setStatus('All changes saved');
+      } catch (err) {
+        if (err.response?.data?.error?.code === 'duplicate_document') {
+          const {data: refreshed} = await api.get(`/claims/${current.current.id}`);
+          accept(refreshed.claim);
+        }
+        throw err;
       } finally {setProgress(null);}
     });
   }
@@ -153,7 +184,7 @@ export default function Wizard() {
   function review(documentId, corrections) {
     run(async () => {
       const clean = Object.fromEntries(Object.entries(corrections).map(([key, value]) => [key, value === '' ? null : value]));
-      if (clean.warranty_duration !== null) clean.warranty_duration = Number(clean.warranty_duration);
+      if ('warranty_duration' in clean && clean.warranty_duration !== null) clean.warranty_duration = Number(clean.warranty_duration);
       const response = await api.patch(`/documents/${documentId}/ocr-review`, {...clean, confirm: true, version: current.current.version});
       accept(response.data.claim); setStatus('Extracted information confirmed');
     });
@@ -180,7 +211,7 @@ export default function Wizard() {
         {step === 1 && <ProductStep products={products} register={form.register} errors={form.formState.errors} selected={selected}/>}
         {step === 2 && <DetailsStep register={form.register} errors={form.formState.errors} today={claim.server_date} description={values.description}/>}
         {step === 3 && <DocumentsStep documents={claim.documents} upload={upload} remove={remove} review={review} retry={retry}
-          progress={progress} busy={busy} policy={claim.document_policy}/>}
+          progress={progress} busy={busy} policy={claim.document_policy} required={claim.document_policy?.required_types}/>}
         {step === 4 && <ReviewStep claim={claim} product={selected} values={values}/>}
       </fieldset><div className="actions"><button type="button" disabled={busy} onClick={() => run(async () => {await persist(form.getValues(), step); navigate('/');})}>Save and exit</button>
         <div>{step > 1 && <button type="button" disabled={busy || blocked.current} onClick={() => go(step - 1)}>Previous</button>}

@@ -1,9 +1,10 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {BrowserRouter, Link, Route, Routes, useNavigate, useParams} from 'react-router-dom';
 import {useForm} from 'react-hook-form';
 import {api, errorMessage, getSession, onExpired, setSession} from './api';
 import {DocumentsStep, ReviewStep} from './components';
 import Wizard from './Wizard';
+import {createMutationQueue} from './mutationQueue';
 import SearchWorkspace from '../search/SearchWorkspace';
 import './styles.css';
 
@@ -48,21 +49,76 @@ function ClaimList() {
 function ClaimDetails() {
   const {claimId} = useParams();
   const [claim, setClaim] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false), [progress, setProgress] = useState(null);
-  useEffect(() => {let active = true; api.get(`/claims/${encodeURIComponent(claimId)}`).then(({data}) => {if (active) setClaim(data.claim);}).catch(err => {if (active) setError(errorMessage(err));}); return () => {active = false;};}, [claimId]);
-  async function change(action) {setBusy(true);setError('');try {const {data} = await action();setClaim(data.claim);} catch (err) {setError(errorMessage(err));} finally {setBusy(false);setProgress(null);}}
-  function upload(type, file) {if (!/\.(jpe?g|png|pdf)$/i.test(file.name) || !['image/jpeg','image/png','application/pdf'].includes(file.type)) {setError('Choose a JPG, JPEG, PNG or PDF file.');return;}
-    if (file.size > (claim.document_policy?.max_document_size_mb || 10) * 1024 * 1024) {setError('File exceeds the configured upload limit.');return;}
-    change(async () => {const form = new FormData();form.append('version', claim.version);form.append('document_type', type);form.append('file', file);
-      setProgress({type, percent: 0});return api.post(`/claims/${claim.id}/documents`, form, {onUploadProgress: event => setProgress({type, percent: Math.round(event.loaded / (event.total || file.size) * 100)})});});}
-  function review(id, corrections) {change(() => api.patch(`/documents/${id}/ocr-review`, {...Object.fromEntries(Object.entries(corrections).map(([key,value]) =>
-    [key, value === '' ? null : key === 'warranty_duration' ? Number(value) : value])), confirm: true, version: claim.version}));}
-  function retry(id) {change(() => api.post(`/documents/${id}/ocr/retry`, {version: claim.version}));}
+  const current = useRef(null), queue = useRef(createMutationQueue()), pending = useRef(0), active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    let cancelled = false;
+    api.get(`/claims/${encodeURIComponent(claimId)}`).then(({data}) => {
+      if (!cancelled) {current.current = data.claim; setClaim(data.claim);}
+    }).catch(err => {if (!cancelled) setError(errorMessage(err));});
+    return () => {cancelled = true; active.current = false;};
+  }, [claimId]);
+  const processing = claim?.documents.some(document => ['pending', 'processing'].includes(document.ocr_status));
+  useEffect(() => {
+    if (!processing || busy) return;
+    let observing = true;
+    const timer = setInterval(async () => {
+      try {
+        const {data} = await api.get(`/claims/${current.current.id}`);
+        if (!observing) return;
+        if (data.claim.version !== current.current.version) {
+          setError('This claim changed in another session. Reload it before continuing.');
+          return;
+        }
+        current.current = data.claim; setClaim(data.claim);
+      } catch { /* Keep the saved evidence visible and retry the status check. */ }
+    }, 2000);
+    return () => {observing = false; clearInterval(timer);};
+  }, [processing, busy]);
+  async function change(action) {
+    pending.current += 1; setBusy(true); setError('');
+    try {
+      await queue.current(async () => {
+        if (!active.current) return;
+        try {
+          const {data} = await action(current.current);
+          current.current = data.claim;
+          if (active.current) setClaim(data.claim);
+        } catch (err) {
+          if (err.response?.data?.error?.code === 'duplicate_document') {
+            const {data} = await api.get(`/claims/${current.current.id}`);
+            current.current = data.claim;
+            if (active.current) setClaim(data.claim);
+          }
+          throw err;
+        }
+      });
+    } catch (err) {if (active.current) setError(errorMessage(err));}
+    finally {pending.current -= 1; if (active.current && !pending.current) {setBusy(false); setProgress(null);}}
+  }
+  function upload(type, file) {
+    if (!/\.(jpe?g|png|pdf)$/i.test(file.name) || !['image/jpeg','image/png','application/pdf'].includes(file.type)) {setError('Choose a JPG, JPEG, PNG or PDF file.');return;}
+    if (file.size > (current.current.document_policy?.max_document_size_mb || 10) * 1024 * 1024) {setError('File exceeds the configured upload limit.');return;}
+    change(async latest => {
+      const form = new FormData();form.append('version', latest.version);form.append('document_type', type);form.append('file', file);
+      setProgress({type, percent: 0});
+      return api.post(`/claims/${latest.id}/documents`, form, {onUploadProgress: event => {
+        if (active.current) setProgress({type, percent: Math.round(event.loaded / (event.total || file.size) * 100)});
+      }});
+    });
+  }
+  function review(id, corrections) {change(latest => api.patch(`/documents/${id}/ocr-review`, {...Object.fromEntries(Object.entries(corrections).map(([key,value]) =>
+    [key, value === '' ? null : key === 'warranty_duration' ? Number(value) : value])), confirm: true, version: latest.version}));}
+  function retry(id) {change(latest => api.post(`/documents/${id}/ocr/retry`, {version: latest.version}));}
   return <>{error && <p role="alert" className="error">{error}</p>}{claim ? <><div className="confirmation"><p className="eyebrow">WE HAVE YOUR CLAIM</p><h1>{claim.claim_id}</h1>
     <p>Status: <strong>{claim.status.replaceAll('_', ' ')}</strong></p><p>Submitted {claim.submitted_at ? new Date(claim.submitted_at).toLocaleString() : claim.submission_date || 'Previously'}</p>
     <Link to="/">Back to my claims</Link></div>{claim.status === 'ADDITIONAL_INFORMATION_REQUIRED' && <div className="panel"><p>Additional evidence was requested. Upload it here for your reviewer.</p>
-      <DocumentsStep documents={claim.documents} upload={upload} review={review} retry={retry} progress={progress} busy={busy} policy={claim.document_policy} canRemove={false}/></div>}
+      <DocumentsStep documents={claim.documents} upload={upload} review={review} retry={retry} progress={progress} busy={busy} policy={claim.document_policy} required={claim.document_policy?.required_types} canRemove={false}/></div>}
     <div className="panel"><ReviewStep claim={claim} product={claim.product} values={claim}/></div></> : !error && <p role="status">Loading claim…</p>}</>;
 }
+
+function DraftRoute() {const {id} = useParams(); return <Wizard key={id}/>;}
+function DetailRoute() {const {claimId} = useParams(); return <ClaimDetails key={claimId}/>;}
 
 export function App({basePath = '/claims'} = {}) {
   const [user, setUser] = useState(() => getSession()?.user || null);
@@ -79,7 +135,7 @@ export function App({basePath = '/claims'} = {}) {
     <nav aria-label="Main navigation"><a href="/products">Products</a><Link to="/" aria-current="page">Claims</Link><a href="/reports">Reports</a><a href="/search">Search</a></nav>
     {user && <div className="account"><span>{user.full_name}</span><button onClick={signOut}>Sign out</button></div>}</header>
     {needsLogin && user && <div className="reauth" role="dialog" aria-modal="true" aria-label="Sign in again"><Login expectedUser={user} signedIn={() => setNeedsLogin(false)}/></div>}
-    <main id="main" inert={needsLogin && user ? true : undefined}>{user ? <Routes><Route path="/" element={<ClaimList/>}/><Route path="/draft/:id" element={<Wizard/>}/>
-      <Route path="/:claimId" element={<ClaimDetails/>}/><Route path="*" element={<p>Page not found. <Link to="/">My claims</Link></p>}/></Routes> : <Login signedIn={setUser}/>}</main>
+    <main id="main" inert={needsLogin && user ? true : undefined}>{user ? <Routes><Route path="/" element={<ClaimList/>}/><Route path="/draft/:id" element={<DraftRoute/>}/>
+      <Route path="/:claimId" element={<DetailRoute/>}/><Route path="*" element={<p>Page not found. <Link to="/">My claims</Link></p>}/></Routes> : <Login signedIn={setUser}/>}</main>
     <footer>AssureX · Product protection, made simple</footer></BrowserRouter>;
 }

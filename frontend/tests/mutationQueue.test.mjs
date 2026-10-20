@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {createMutationQueue} from '../src/claims/mutationQueue.js';
+const enqueue = createMutationQueue();
+let release;
+const wait = new Promise(resolve => release = resolve);
+let version = 1;
+const files = [];
+const first = enqueue(async () => {await wait; assert.equal(version,1); files.push('first'); version++;});
+const failed = enqueue(async () => {assert.equal(version,2); throw new Error('duplicate');});
+const handledFailure = failed.catch(error => {assert.equal(error.message,'duplicate');});
+const second = enqueue(async () => {assert.equal(version,2); files.push('second'); version++;});
+release();
+await Promise.all([first,handledFailure,second]);
+assert.deepEqual(files,['first','second']);
+assert.equal(version,3);
+console.log('Mutation queue concurrency and recovery checks passed');
