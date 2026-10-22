@@ -8,7 +8,7 @@ from marshmallow import ValidationError
 from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 from werkzeug.exceptions import Conflict, Forbidden, NotFound
-from backend.api.claim_schemas import DraftSchema
+from backend.schemas.claims import DraftSchema
 from backend.db.models import Claim, ClaimSequence, Product, utcnow
 from backend.extensions import db
 from backend.security import role_required
@@ -49,9 +49,9 @@ def lock_draft(claim, version):
     db.session.refresh(claim)
 
 
-def selected_product(product_id):
+def selected_product(product_id, *, owner_id=None):
     product = db.session.scalar(select(Product).where(Product.id == product_id,
-        Product.user_id == current_user.id).options(selectinload(Product.warranties)).with_for_update())
+        Product.user_id == (current_user.id if owner_id is None else owner_id)).options(selectinload(Product.warranties)).with_for_update())
     if product is None:
         raise ValidationError({"product_id": ["Select one of your registered products."]})
     if not product.is_active:
@@ -83,12 +83,31 @@ def validation_errors(claim, *, verify_files=False):
         errors["description"] = ["Use at least 20 characters."]
     if claim.product_id:
         try:
-            selected_product(claim.product_id)
+            selected_product(claim.product_id, owner_id=claim.user_id)
         except ValidationError as exc:
             errors.update(exc.messages)
+    errors.update(evidence_validation_errors(claim, verify_files=verify_files))
+    return errors
+
+
+def evidence_validation_errors(claim, *, verify_files=False):
+    """Validate an evidence response without revalidating legacy submission fields."""
+    errors = {}
     document_state = completeness(claim, required_documents(claim))
     if document_state["missing"]:
         errors["documents"] = ["Upload: " + ", ".join(sorted(document_state["missing"])) + "."]
+    if claim.information_request:
+        from .document_service import stored_document_type
+        requested = claim.information_request.get("document_types", [])
+        earlier = set(claim.information_request.get("existing_document_ids", []))
+        supplied = {document.document_type for document in claim.documents if document.id not in earlier}
+        if "invoice" in supplied:
+            supplied.add("receipt")
+        missing = [kind for kind in requested if stored_document_type(kind) not in supplied]
+        if missing:
+            errors.setdefault("documents", []).append("Upload new requested evidence: " + ", ".join(missing) + ".")
+        if not requested and not any(document.id not in earlier for document in claim.documents):
+            errors.setdefault("documents", []).append("Upload additional evidence requested by your service center.")
     if sum(d.file_size for d in claim.documents) > total_limit():
         errors["documents"] = ["Total upload size cannot exceed 50 MB."]
     if len(claim.documents) > current_app.config["MAX_DOCUMENTS_PER_CLAIM"]:
@@ -131,8 +150,17 @@ def timestamp(value):
 
 
 def workflow_json(claim):
+    from .assessments import latest, public
+    requested = (claim.information_request or {}).get("document_types", [])
+    required = list(dict.fromkeys([*required_documents(claim), *requested]))
     return {"id": claim.id, "claim_id": None if claim.status == "draft" else claim.claim_id,
+        "assessment": public(latest(claim.id)) if claim.status != "draft" else None,
+        "information_request": {key: value for key, value in (claim.information_request or {}).items()
+            if key in {"document_types", "requested_at", "message"}},
         "customer_id": claim.user_id, "product_id": claim.product_id, "status": claim.status.upper(),
+        "warranty_id": claim.warranty_id, "fault_description": claim.fault_description,
+        "damage_type": claim.damage_type,
+        "final_decision": claim.final_decision if claim.status in {"approved", "rejected", "closed"} else None,
         "current_step": claim.current_step, "version": claim.version,
         "fault_date": claim.fault_date.isoformat() if claim.fault_date else None,
         "fault_type": claim.fault_type, "description": claim.description, "damage_category": claim.damage_category,
@@ -143,8 +171,8 @@ def workflow_json(claim):
         "server_date": current_date().isoformat(),
         "product": product_json(claim.product, current_date()) if claim.product else None,
         "documents": [document_json(d) for d in claim.documents],
-        "document_completeness": completeness(claim, required_documents(claim)),
-        "document_policy": {"required_types": required_documents(claim), "allowed_extensions": ["pdf", "jpg", "jpeg", "png"],
+        "document_completeness": completeness(claim, required),
+        "document_policy": {"required_types": required, "allowed_extensions": ["pdf", "jpg", "jpeg", "png"],
             "max_document_size_mb": current_app.config["MAX_DOCUMENT_SIZE_MB"],
             "max_documents_per_claim": current_app.config["MAX_DOCUMENTS_PER_CLAIM"],
             "max_claim_upload_size_mb": current_app.config["MAX_CLAIM_UPLOAD_SIZE_MB"]}}

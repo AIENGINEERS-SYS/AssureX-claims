@@ -15,8 +15,7 @@ bp = Blueprint("review", __name__, url_prefix="/api/review")
 def reviewable(claim_id):
     query = select(Claim).where(Claim.id == claim_id)
     if current_user.role != "admin":
-        query = query.where((Claim.assigned_reviewer_id.is_(None)) |
-            (Claim.assigned_reviewer_id == current_user.id))
+        query = query.where(Claim.assigned_reviewer_id == current_user.id)
     claim = db.session.scalar(query.with_for_update())
     if claim is None:
         raise NotFound("Claim not found.")
@@ -26,17 +25,16 @@ def reviewable(claim_id):
 
 
 @bp.get("/manual")
-@role_required("reviewer")
+@role_required("reviewer", "admin")
 def manual():
     query = select(Claim).where(Claim.manual_review_required.is_(True), Claim.status == "manual_review")
     if current_user.role != "admin":
-        query = query.where((Claim.assigned_reviewer_id.is_(None)) |
-            (Claim.assigned_reviewer_id == current_user.id))
+        query = query.where(Claim.assigned_reviewer_id == current_user.id)
     return page(query.order_by(Claim.id), claim_json)
 
 
 @bp.get("/<int:claim_id>/risk")
-@role_required("reviewer")
+@role_required("reviewer", "admin")
 def risk(claim_id):
     reviewable(claim_id)
     return page(select(RuleResult).where(RuleResult.claim_id == claim_id).order_by(RuleResult.id.desc()),
@@ -47,7 +45,9 @@ def risk(claim_id):
 def record(claim_id, decision, data=None, *, explicit_override=False):
     data = data or body(ReviewSchema())
     claim = reviewable(claim_id)
-    previous = claim.final_decision
+    from backend.services.evaluation import latest_evaluation
+    evaluation = latest_evaluation(claim.id)
+    previous = evaluation.recommendation if evaluation else claim.final_decision
     human_decision = "likely_valid" if decision == "approve" else "likely_invalid" if decision == "reject" else None
     differs = bool(human_decision and previous and human_decision != previous)
     if differs and not explicit_override:
@@ -88,35 +88,35 @@ def record(claim_id, decision, data=None, *, explicit_override=False):
 
 
 @bp.post("/<int:claim_id>/approve")
-@role_required("reviewer")
+@role_required("reviewer", "admin")
 def approve(claim_id):
     return record(claim_id, "approve")
 
 
 @bp.post("/<int:claim_id>/reject")
-@role_required("reviewer")
+@role_required("reviewer", "admin")
 def reject(claim_id):
     return record(claim_id, "reject")
 
 
 @bp.post("/<int:claim_id>/notes")
-@role_required("reviewer")
+@role_required("reviewer", "admin")
 def notes(claim_id):
     return record(claim_id, "manual_review_continue")
 
 
 @bp.post("/<int:claim_id>/override")
-@role_required("reviewer")
+@role_required("reviewer", "admin")
 def override(claim_id):
     data = body(OverrideSchema())
     return record(claim_id, data["decision"], data, explicit_override=True)
 
 
 @bp.get("/<int:claim_id>/audit-history")
-@role_required("reviewer")
+@role_required("reviewer", "admin")
 def history(claim_id):
     claim = db.session.scalar(select(Claim).where(Claim.id == claim_id))
-    if claim is None or (current_user.role != "admin" and claim.assigned_reviewer_id not in (None, current_user.id)):
+    if claim is None or (current_user.role != "admin" and claim.assigned_reviewer_id != current_user.id):
         raise NotFound("Claim not found.")
     reviews = db.session.scalars(select(Review).where(Review.claim_id == claim.id)
         .order_by(Review.reviewed_at.desc(), Review.id.desc())).all()

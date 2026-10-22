@@ -93,7 +93,9 @@ def test_reviewer_actions_and_assignment_scope(client, app, accounts, claims):
     assert dashboard.json["summary"]["pending"] == 1
     assert "damage_evidence" in dashboard.json["missing_documents"][0]["missing"]
     claim_id = claims["customer"]["claim"]
-    assert client.patch(f"/api/dashboard/reviewer/claims/{claim_id}/assignment", headers=reviewer, json={}).status_code == 200
+    assert client.patch(f"/api/dashboard/reviewer/claims/{claim_id}/assignment", headers=reviewer, json={}).status_code == 403
+    assert client.patch(f"/api/dashboard/reviewer/claims/{claim_id}/assignment", headers=auth(client, "admin"),
+        json={"reviewer_id": accounts["reviewer"]}).status_code == 200
     with app.app_context():
         second = User(email="second-reviewer@example.com", full_name="Second", first_name="Second",
             last_name="Reviewer", role="reviewer")
@@ -147,6 +149,13 @@ def test_admin_analytics_disagreement_and_duplicates(client, app, accounts, clai
     assert queue.status_code == 200, queue.json
     assert queue.json["queue"][0]["risk_score"] == 75
     assert queue.json["disagreements"][0]["claim_id"]
+    assert queue.json["duplicates"] == []  # The matching claim is outside this reviewer's assignment.
+    with app.app_context():
+        other = db.session.get(Claim, claims["other"]["claim"])
+        other.assigned_reviewer_id = accounts["reviewer"]
+        other.status, other.manual_review_required = "manual_review", True
+        db.session.commit()
+    queue = client.get("/api/dashboard/reviewer", headers=reviewer)
     duplicate = queue.json["duplicates"][0]
     assert client.post("/api/dashboard/reviewer/duplicates/decision", headers=reviewer,
         json={**duplicate, "file_hash": "z" * 64, "status": "confirmed"}).status_code == 400

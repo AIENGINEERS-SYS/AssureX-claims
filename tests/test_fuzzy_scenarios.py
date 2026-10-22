@@ -59,7 +59,7 @@ def test_scenario_one_valid_claim(app, claims):
     assert len(explanation["supporting_evidence"]) == 6
 
 
-def test_complete_evidence_no_longer_triggers_missing_document_false_positive(client, app, claims, tmp_path):
+def test_complete_evidence_no_longer_triggers_missing_document_false_positive(client, app, claims, accounts, tmp_path):
     """Complete evidence satisfies document requirements even if another issue escalates."""
     customer = auth(client, "customer")
     reviewer = auth(client, "reviewer")
@@ -69,6 +69,9 @@ def test_complete_evidence_no_longer_triggers_missing_document_false_positive(cl
     submitted = submit(client, customer, claim)
     assert submitted.status_code == 201, submitted.json
     claim_id = submitted.json["claim"]["id"]
+    with app.app_context():
+        db.session.get(Claim, claim_id).assigned_reviewer_id = accounts["reviewer"]
+        db.session.commit()
 
     response = client.post(f"/api/claims/{claim_id}/evaluate", headers=reviewer)
     assert response.status_code == 201, response.json
@@ -105,7 +108,7 @@ def test_scenario_two_invalid_claim(client, app, claims, tmp_path):
     assert {"warranty_expiry", "excluded_damage"} <= codes
     with app.app_context():
         claim = db.session.get(Claim, claim_id)
-        assert claim.final_decision == "likely_invalid"
+        assert claim.final_decision is None  # Only an authorized human review records a final decision.
         assert claim.status == "under_evaluation"
 
 
@@ -179,6 +182,9 @@ def test_scenario_five_missing_document_claim(client, app, accounts, tmp_path):
     app.config["MODEL_CARD_PATH"] = str(tmp_path / "cards")
     ids = seed_claim(app, user_id=accounts["customer"])
     add_document(app, ids["claim"], accounts["customer"], "receipt")
+    with app.app_context():
+        db.session.get(Claim, ids["claim"]).assigned_reviewer_id = accounts["reviewer"]
+        db.session.commit()
     response = client.post(f"/api/claims/{ids['claim']}/evaluate", headers=auth(client, "reviewer"))
     assert response.status_code == 201, response.json
     body = response.json["evaluation"]

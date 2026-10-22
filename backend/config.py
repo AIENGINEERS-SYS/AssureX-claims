@@ -77,6 +77,9 @@ def settings():
         "REPORT_BATCH_SIZE": _integer("REPORT_BATCH_SIZE", 1000),
         "REPORT_MAX_PENDING": _integer("REPORT_MAX_PENDING", 3),
         "REPORT_LEASE_MINUTES": _integer("REPORT_LEASE_MINUTES", 15),
+        "ASSESSMENT_MAX_ATTEMPTS": _integer("ASSESSMENT_MAX_ATTEMPTS", 3),
+        "ASSESSMENT_RETRY_SECONDS": _integer("ASSESSMENT_RETRY_SECONDS", 30),
+        "ASSESSMENT_LEASE_SECONDS": _integer("ASSESSMENT_LEASE_SECONDS", 900),
         "REPORT_PDF_FONT": os.getenv("REPORT_PDF_FONT"),
         "SEARCH_TIMEOUT_MS": _integer("SEARCH_TIMEOUT_MS", 5000),
         "SEARCH_RETENTION_DAYS": _integer("SEARCH_RETENTION_DAYS", 30),
@@ -129,6 +132,9 @@ def settings():
 
 
 def validate_config(app):
+    for name, maximum in (("ASSESSMENT_MAX_ATTEMPTS", 10), ("ASSESSMENT_RETRY_SECONDS", 3600), ("ASSESSMENT_LEASE_SECONDS", 86400)):
+        if type(app.config[name]) is not int or not 1 <= app.config[name] <= maximum:
+            raise RuntimeError(f"{name} must be between 1 and {maximum}")
     for name, maximum in (("SEARCH_TIMEOUT_MS", 60000), ("SEARCH_RETENTION_DAYS", 365)):
         if not 1 <= app.config[name] <= maximum:
             raise RuntimeError(f"{name} must be between 1 and {maximum}")

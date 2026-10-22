@@ -35,4 +35,26 @@ case "${REPORT_WORKER_ENABLED:-true}" in
     ;;
 esac
 
+# Assessments reuse the database queue pattern and load models only in the
+# process performing inference. The supervisor restarts an interrupted worker;
+# persisted leases and bounded retries recover its jobs.
+case "${ASSESSMENT_WORKER_ENABLED:-true}" in
+  1|true|TRUE|yes|YES)
+    (
+      while :; do
+        if MODEL_PRELOAD_ENABLED=false MODEL_PRELOAD_STRICT=false \
+            python -m flask --app backend:create_app assessment-worker; then
+          status=0
+        else
+          status=$?
+        fi
+        echo "AssureX assessment worker exited with status ${status}; restarting in 2 seconds." >&2
+        sleep 2
+      done
+    ) &
+    ;;
+  0|false|FALSE|no|NO) echo "AssureX assessment worker disabled by ASSESSMENT_WORKER_ENABLED." >&2 ;;
+  *) echo "ASSESSMENT_WORKER_ENABLED must be true/false, yes/no, or 1/0." >&2; exit 2 ;;
+esac
+
 exec waitress-serve --listen="0.0.0.0:${PORT}" --call backend:create_app

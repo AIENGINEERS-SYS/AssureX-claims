@@ -11,7 +11,7 @@ from backend.db.models import User, utcnow
 
 
 def role_required(*roles):
-    """Authenticate first, authorize using the current DB role; admins inherit access."""
+    """Authenticate first and allow only explicitly named, current database roles."""
     if not roles or not set(roles) <= {"customer", "employee", "reviewer", "admin"}:
         raise ValueError("role_required needs known roles")
 
@@ -19,9 +19,10 @@ def role_required(*roles):
         @wraps(fn)
         def wrapped(*args, **kwargs):
             verify_jwt_in_request()
-            if current_user.role != "admin" and current_user.role not in roles:
+            if current_user.role not in roles:
                 raise Forbidden("Your role cannot access this resource.")
             return fn(*args, **kwargs)
+        wrapped.required_roles = tuple(roles)
         return wrapped
     return decorate
 

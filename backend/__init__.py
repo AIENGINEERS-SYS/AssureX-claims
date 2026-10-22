@@ -30,12 +30,13 @@ def create_app(config=None):
     from .middleware import init_middleware
     from .frontend import init_frontend_routes
     from .cli import init_cli
-    from .api import auth, admin, claims, review, products, claim_workflow, documents, dashboard, predictions, notifications, reports, search
+    from .api import auth, admin, claims, review, products, claim_workflow, documents, dashboard, predictions, notifications, reports, search, assessments, staff
     init_jwt_callbacks()
     init_middleware(app)
     init_frontend_routes(app)
     init_cli(app)
     reports.init_cli(app)
+    assessments.init_cli(app)
     search.init_cli(app)
     @app.cli.command("dashboard-reminders")
     def dashboard_reminders():
@@ -54,7 +55,7 @@ def create_app(config=None):
         return {"status": "ok"}
 
     for blueprint in (auth.bp, admin.bp, claims.bp, review.bp, products.bp, claim_workflow.bp, documents.bp,
-                      dashboard.bp, predictions.bp, notifications.bp, reports.bp, search.bp):
+                      dashboard.bp, predictions.bp, notifications.bp, reports.bp, search.bp, assessments.bp, staff.bp):
         app.register_blueprint(blueprint)
 
     from .docs import init_api_docs

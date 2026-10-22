@@ -11,6 +11,21 @@ from .schemas import AdminCreateSchema, AdminUpdateSchema, body, claim_json, use
 bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
 
+@bp.get("/assessments")
+@role_required("admin")
+def assessment_failures():
+    from backend.db.assessment_models import AssessmentJob
+    from backend.services import assessments
+    from sqlalchemy.orm import aliased
+    newer = aliased(AssessmentJob)
+    return page(select(AssessmentJob).join(Claim, Claim.id == AssessmentJob.claim_id).where(
+        AssessmentJob.status.in_(("failed", "retry_wait", "superseded")),
+        Claim.status.not_in(("approved", "rejected", "closed")),
+        ~select(newer.id).where(newer.claim_id == AssessmentJob.claim_id,
+            newer.version > AssessmentJob.version).exists())
+        .order_by(AssessmentJob.updated_at.desc()), lambda item: assessments.public(item) | {"claim_id": item.claim_id})
+
+
 @bp.get("/users")
 @role_required("admin")
 def users():

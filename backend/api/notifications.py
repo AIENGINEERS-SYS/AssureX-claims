@@ -84,7 +84,7 @@ def _audit(action: str, entity_id: str, *, old=None, new=None, claim_id=None):
 
 
 @bp.get("")
-@role_required(*ALL_ROLES)
+@role_required(*ALL_ROLES, "admin")
 @limiter.limit("120 per minute")
 def list_notifications():
     page, per_page = _page_args()
@@ -152,7 +152,7 @@ def list_notifications():
 
 
 @bp.get("/unread")
-@role_required(*ALL_ROLES)
+@role_required(*ALL_ROLES, "admin")
 @limiter.limit("120 per minute")
 def unread():
     try:
@@ -176,7 +176,7 @@ def unread():
 
 
 @bp.get("/preferences")
-@role_required(*ALL_ROLES)
+@role_required(*ALL_ROLES, "admin")
 def get_preferences():
     item = db.session.scalar(
         select(NotificationPreference).where(NotificationPreference.user_id == current_user.id)
@@ -185,7 +185,7 @@ def get_preferences():
 
 
 @bp.patch("/preferences")
-@role_required(*ALL_ROLES)
+@role_required(*ALL_ROLES, "admin")
 def update_preferences():
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict) or not payload:
@@ -336,13 +336,13 @@ def analytics():
 
 
 @bp.get("/<int:notification_id>")
-@role_required(*ALL_ROLES)
+@role_required(*ALL_ROLES, "admin")
 def get_notification(notification_id):
     return {"notification": notification_json(_owned(notification_id))}
 
 
 @bp.patch("/<int:notification_id>/read")
-@role_required(*ALL_ROLES)
+@role_required(*ALL_ROLES, "admin")
 def mark_read(notification_id):
     item = _owned(notification_id, lock=True)
     if not item.is_read:
@@ -361,7 +361,7 @@ def mark_read(notification_id):
 
 
 @bp.patch("/read-all")
-@role_required(*ALL_ROLES)
+@role_required(*ALL_ROLES, "admin")
 def mark_all_read():
     now = utcnow()
     result = db.session.execute(
@@ -384,7 +384,7 @@ def mark_all_read():
 
 
 @bp.delete("/<int:notification_id>")
-@role_required(*ALL_ROLES)
+@role_required(*ALL_ROLES, "admin")
 def delete_notification(notification_id):
     item = _owned(notification_id, lock=True)
     item.deleted_at = utcnow()

@@ -279,7 +279,8 @@ def document_json(document: Document, *, include_text=False, include_fraud=False
         "file_name": document.original_filename, "file_type": document.mime_type,
         "file_size": document.file_size, "uploaded_at": timestamp(document.created_at),
         "uploaded_by": document.uploaded_by, "upload_status": document.upload_status,
-        "ocr_status": document.ocr_status, "ocr_error": document.ocr_error,
+        "ocr_status": document.ocr_status, "ocr_error": document.ocr_error if include_fraud else
+            ("Evidence processing needs attention. Retry analysis or continue for manual review." if document.ocr_error else None),
         "ocr_confidence": float(document.ocr_confidence) if document.ocr_confidence is not None else None,
         "ocr_confidence_label": confidence_label(document.ocr_confidence),
         "ocr_provider": document.ocr_provider, "ocr_provider_version": document.ocr_provider_version,

@@ -211,7 +211,15 @@ def test_owner_and_staff_document_authorization(client, app, headers, claims, oc
     reviewer = bearer(login(client, "reviewer")["access_token"])
     assert client.get(f"/api/documents/{document['id']}", headers=reviewer).status_code == 404
     with app.app_context():
-        stored = db.session.get(Claim, claim["id"]); stored.manual_review_required = True; db.session.commit()
+        from backend.db.models import User
+        stored = db.session.get(Claim, claim["id"])
+        stored.manual_review_required = True
+        db.session.commit()
+    assert client.get(f"/api/documents/{document['id']}", headers=reviewer).status_code == 404
+    with app.app_context():
+        stored = db.session.get(Claim, claim["id"])
+        stored.assigned_reviewer_id = db.session.scalar(select(User.id).where(User.role == "reviewer"))
+        db.session.commit()
     assert client.get(f"/api/documents/{document['id']}", headers=reviewer).status_code == 200
     admin = bearer(login(client, "admin")["access_token"])
     assert client.get(f"/api/documents/{document['id']}", headers=admin).status_code == 200

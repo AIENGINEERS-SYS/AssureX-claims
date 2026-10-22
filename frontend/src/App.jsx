@@ -1,5 +1,8 @@
 import React, {Suspense, useEffect, useState} from 'react';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
+import {getSession, onSessionChange} from './claims/api';
+import {canAccess} from './auth/access';
+import AccessDenied from './auth/AccessDenied';
 
 const ClaimsApp = React.lazy(() => import('./claims/main').then(module => ({default: module.App})));
 const DashboardApp = React.lazy(() => import('./dashboard/main').then(module => ({default: module.App})));
@@ -16,6 +19,11 @@ const queryClient = new QueryClient({defaultOptions: {queries: {
 
 export default function App() {
   const [path, setPath] = useState(window.location.pathname);
+  const [session, setCurrentSession] = useState(getSession);
+  useEffect(() => onSessionChange(value => {
+    queryClient.clear();
+    setCurrentSession(value);
+  }), []);
   useEffect(() => {
     const changed = () => setPath(window.location.pathname);
     const navigate = event => {
@@ -35,7 +43,7 @@ export default function App() {
     document.addEventListener('click', navigate);
     return () => {window.removeEventListener('popstate', changed);document.removeEventListener('click', navigate);};
   }, []);
-  const content = path.startsWith('/search') ? <SearchApp /> : path.startsWith('/reports') ? <ReportsApp /> : path.startsWith('/products')
+  const content = session && !canAccess(path, session.user.role) ? <AccessDenied role={session.user.role}/> : path.startsWith('/search') ? <SearchApp /> : path.startsWith('/reports') ? <ReportsApp /> : path.startsWith('/products')
     ? <ProductsApp />
     : path.startsWith('/dashboard')
       ? <DashboardApp />

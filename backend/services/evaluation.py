@@ -49,6 +49,9 @@ def evaluation_json(item, *, technical=True):
 
 class ClaimEvaluationService:
     def evaluate(self, claim):
+        from werkzeug.exceptions import Conflict
+        if claim.status in {"draft", "approved", "rejected", "closed"}:
+            raise Conflict("This claim cannot be evaluated in its current state.")
         policy, policy_error = policy_for_claim(claim)
         errors = {"policy": policy_error} if policy_error else {}
         outputs, records = {}, {}
@@ -92,7 +95,8 @@ class ClaimEvaluationService:
             model_errors=errors, policy_code=policy.code, policy_version=policy.version)
         db.session.add(item)
         previous_status = claim.status
-        claim.final_decision = recommendation
+        # Automated recommendations live on immutable EvaluationResult rows.
+        # final_decision is reserved for an authorized human review.
         if recommendation == "manual_review_required":
             claim.status, claim.manual_review_required = "manual_review", True
             if previous_status != "manual_review":

@@ -83,7 +83,7 @@ def warranties():
 
 
 @bp.get('/review/search')
-@role_required('reviewer')
+@role_required('reviewer', "admin")
 @limiter.limit('60 per minute', key_func=lambda: str(current_user.id))
 def review():
     return execute('review')

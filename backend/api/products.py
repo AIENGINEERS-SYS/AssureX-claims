@@ -46,7 +46,7 @@ def flush_product():
 
 
 @bp.post("/products")
-@role_required("customer")
+@role_required("customer", "admin")
 def register():
     data = body(ProductRegistration())
     warranty_data = WarrantyInput().load({
@@ -86,7 +86,7 @@ def query_with_status(today):
 
 
 @bp.get("/products")
-@role_required("customer")
+@role_required("customer", "admin")
 def index():
     args = ProductQuery().load(request.args.to_dict())
     query, status, selected = query_with_status(g.product_today)
@@ -115,7 +115,7 @@ def index():
 
 
 @bp.post("/warranties/preview")
-@role_required("customer")
+@role_required("customer", "admin")
 def preview():
     data = body(WarrantyPreview())
     if data["duration"] * (12 if data["duration_unit"] == "years" else 1) > 1200:
@@ -128,13 +128,13 @@ def preview():
 
 
 @bp.get("/products/<int:product_id>")
-@role_required("customer")
+@role_required("customer", "admin")
 def details(product_id):
     return {"product": product_json(owned_product(product_id), g.product_today, details=True)}
 
 
 @bp.put("/products/<int:product_id>")
-@role_required("customer")
+@role_required("customer", "admin")
 def update(product_id):
     product = owned_product(product_id, lock=True)
     data = body(ProductFields())
@@ -155,7 +155,7 @@ def update(product_id):
 
 
 @bp.delete("/products/<int:product_id>")
-@role_required("customer")
+@role_required("customer", "admin")
 def delete(product_id):
     product = owned_product(product_id, lock=True)
     if references_product(product) or any(references_warranty(w) for w in product.warranties):
@@ -170,7 +170,7 @@ def delete(product_id):
 
 
 @bp.get("/products/<int:product_id>/warranties")
-@role_required("customer")
+@role_required("customer", "admin")
 def warranty_history(product_id):
     product = owned_product(product_id)
     return {"items": [warranty_json(w, g.product_today) for w in sorted(product.warranties, key=lambda w: (w.start_date, w.id))],
@@ -178,7 +178,7 @@ def warranty_history(product_id):
 
 
 @bp.post("/products/<int:product_id>/warranties")
-@role_required("customer")
+@role_required("customer", "admin")
 def add_warranty(product_id):
     product = owned_product(product_id, lock=True)
     data = body(WarrantyInput())
@@ -210,7 +210,7 @@ def owned_warranty(warranty_id):
 
 
 @bp.put("/warranties/<int:warranty_id>")
-@role_required("customer")
+@role_required("customer", "admin")
 def update_warranty(warranty_id):
     product, warranty = owned_warranty(warranty_id)
     data = body(WarrantyInput())
@@ -225,7 +225,7 @@ def update_warranty(warranty_id):
 
 
 @bp.delete("/warranties/<int:warranty_id>")
-@role_required("customer")
+@role_required("customer", "admin")
 def delete_warranty(warranty_id):
     product, warranty = owned_warranty(warranty_id)
     if references_warranty(warranty):

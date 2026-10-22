@@ -1,5 +1,10 @@
 # Reports and exports
 
+Submitted claims also have durable, versioned assessment reports directly on their
+customer claim detail page. These JSON snapshots do not share the aggregate export
+jobs' expiry. PDF/CSV/Excel downloads render that exact snapshot through the existing
+writers. See [assessment lifecycle and access](assessment-lifecycle.md).
+
 The report center at `/reports` uses the existing JWT session and database roles. Customers see their own records through a non-technical report view; employees see assigned claims; reviewers see explicitly assigned claims; administrators can request system-wide reports. An unassigned manual-review claim is **not** reportable by a reviewer. Customer-wide reports require the customer themselves or an administrator. Staff product reports include only claims and warranties within their assignment scope.
 
 ## Components
