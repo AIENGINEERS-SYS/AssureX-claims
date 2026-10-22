@@ -11,3 +11,23 @@
 @media(max-width:1050px){.notification-filters{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:740px){.notification-dropdown{right:-72px}.notification-filters{grid-template-columns:1fr 1fr}.notification-row{align-items:flex-start}.notification-row .row-actions{flex-direction:column;align-items:flex-end}}
 @media(max-width:450px){.notification-filters{grid-template-columns:1fr}.notification-dropdown{position:fixed;left:10px;right:10px;top:58px;width:auto}.notification-row{display:grid}.notification-row .row-actions{flex-direction:row;align-items:center}}
+
+/* Administration: claim queue, assessment jobs, and staff accounts. */
+.admin-operations{display:grid;gap:16px}
+.admin-operations .page-head{margin-bottom:4px}
+.admin-operations .panel{min-width:0;padding:20px 22px;background:#fff;border:1px solid #e6ebe4;border-radius:12px;box-shadow:0 2px 8px #193e1a08}
+.admin-operations .panel h2{margin:0 0 16px;font-size:18px;letter-spacing:-.025em;color:#173a30}
+.admin-operations .panel h3{margin:20px 0 10px;font-size:14px;color:#284a3e}
+.admin-operations .panel p{color:#65736c;line-height:1.5}
+.admin-operations .panel ul{list-style:none;margin:0 0 14px;padding:0;border:1px solid #edf1eb;border-radius:9px;overflow:hidden}
+.admin-operations .panel li{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px 14px;border-bottom:1px solid #edf1eb;font-size:13px;overflow-wrap:anywhere}
+.admin-operations .panel li:last-child{border-bottom:0}
+.admin-operations .panel li:nth-child(even){background:#fbfcfa}
+.admin-operations .panel button{border:1px solid #c7d1c8;border-radius:8px;background:#fff;color:#19594c;padding:8px 12px;font-size:12px;font-weight:700}
+.admin-operations .panel button:hover:not(:disabled){background:#f1f7ed}
+.admin-operations .panel button:disabled{opacity:.5}
+.admin-operations .panel label{display:grid;gap:6px;margin:12px 0;font-size:12px;font-weight:700;color:#385449}
+.admin-operations .panel input,.admin-operations .panel select{width:100%;max-width:420px;min-height:39px;border:1px solid #d7dfd7;border-radius:8px;background:#fff;padding:9px 10px;color:#173a30;font-size:13px}
+.admin-operations .panel form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px;max-width:880px}
+.admin-operations .panel form button{justify-self:start;align-self:end;margin:12px 0}
+@media(max-width:740px){.admin-operations .panel{padding:17px}.admin-operations .panel form{grid-template-columns:1fr}.admin-operations .panel input,.admin-operations .panel select{max-width:none}}

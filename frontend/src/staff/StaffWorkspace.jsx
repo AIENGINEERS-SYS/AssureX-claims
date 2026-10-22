@@ -19,7 +19,7 @@ export default function StaffWorkspace({admin = false}) {
     catch (err) {setError(errorMessage(err));} finally {setBusy(false);}
   }
   const claim = details.data?.claim;
-  return <><div className="page-head"><div><h1>{admin ? 'Claim and account administration' : 'Assigned claims'}</h1>
+  return <div className={`staff-workspace${admin ? ' admin-operations' : ''}`}><div className="page-head"><div><h1>{admin ? 'Claim and account administration' : 'Assigned claims'}</h1>
     <p>{admin ? 'Manage assignments, employee accounts and failed assessment jobs.' : 'Inspect evidence, request information and run permitted assessments.'}</p></div></div>
     {error && <p className="error-box" role="alert">{error}</p>}
     {(claims.error || users.error || failures.error) && <p role="alert">{errorMessage(claims.error || users.error || failures.error)}</p>}
@@ -62,5 +62,5 @@ export default function StaffWorkspace({admin = false}) {
         <input type={type} autoComplete={type === 'password' ? 'new-password' : undefined} minLength={key === 'password' ? 12 : 1} required value={account[key]} onChange={event => setAccount(value => ({...value, [key]: event.target.value}))}/></label>)}
         <label>Role<select value={account.role} onChange={event => setAccount(value => ({...value, role: event.target.value}))}><option value="employee">Employee</option><option value="reviewer">Reviewer</option></select></label>
         <button disabled={busy}>Create account</button></form></section></>}
-  </>;
+  </div>;
 }
