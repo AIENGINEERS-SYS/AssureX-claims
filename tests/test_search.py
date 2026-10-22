@@ -142,7 +142,7 @@ def test_role_scopes_reviewable_queue_and_global_group_privacy(app, client, acco
         other = db.session.get(Claim, records['other']['claim'])
         other.status, other.manual_review_required = 'manual_review', True
         db.session.commit()
-    assert get(client, headers=reviewer, assignment='unassigned')['total'] == 1
+    assert get(client, headers=reviewer, assignment='unassigned')['total'] == 0
     with app.app_context():
         second = User(email='second-reviewer@example.com', first_name='Second', last_name='Reviewer',
             role='reviewer', password_hash='not-a-password')

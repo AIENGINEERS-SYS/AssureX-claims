@@ -37,7 +37,7 @@ def pagination():
 
 
 @bp.get("/customer")
-@role_required("customer")
+@role_required("customer", "admin")
 @limiter.limit("60 per minute")
 def customer():
     user_id = current_user.id
@@ -50,7 +50,7 @@ def customer():
 
 
 @bp.get("/reviewer")
-@role_required("reviewer")
+@role_required("reviewer", "admin")
 @limiter.limit("60 per minute")
 def reviewer():
     search = request.args.get("search", "").strip()
@@ -80,7 +80,7 @@ def models():
 
 
 @bp.get("/trends")
-@role_required("customer", "reviewer")
+@role_required("customer", "reviewer", "admin")
 @limiter.limit("60 per minute")
 def trends_endpoint():
     window, interval = request.args.get("window", "30d"), request.args.get("interval", "day")
@@ -98,7 +98,7 @@ def trends_endpoint():
 
 
 @bp.get("/notifications")
-@role_required("customer", "employee", "reviewer")
+@role_required("customer", "employee", "reviewer", "admin")
 def notifications():
     query = select(Notification).where(
         Notification.user_id == current_user.id, Notification.deleted_at.is_(None))
@@ -112,7 +112,7 @@ def notifications():
 
 
 @bp.patch("/notifications/<int:notification_id>/read")
-@role_required("customer", "employee", "reviewer")
+@role_required("customer", "employee", "reviewer", "admin")
 def mark_read(notification_id):
     item = db.session.scalar(select(Notification).where(Notification.id == notification_id,
         Notification.user_id == current_user.id).with_for_update())
@@ -144,7 +144,7 @@ def visible_claim(claim_id, lock=False, include_info=False):
 
 
 @bp.get("/reviewer/claims/<int:claim_id>")
-@role_required("reviewer")
+@role_required("reviewer", "admin")
 def review_details(claim_id):
     claim = visible_claim(claim_id, include_info=True)
     documents = db.session.scalars(select(Document).where(Document.claim_id == claim.id)).all()
@@ -181,7 +181,7 @@ def review_details(claim_id):
 
 
 @bp.patch("/reviewer/claims/<int:claim_id>/assignment")
-@role_required("reviewer")
+@role_required("admin")
 def assign(claim_id):
     claim = visible_claim(claim_id, lock=True)
     if current_user.role == "admin":
@@ -202,26 +202,30 @@ def assign(claim_id):
 
 
 @bp.post("/reviewer/claims/<int:claim_id>/request-documents")
-@role_required("reviewer")
+@role_required("reviewer", "admin")
 def request_documents(claim_id):
     claim = visible_claim(claim_id, lock=True)
     types = (request.get_json(silent=True) or {}).get("document_types")
     if not isinstance(types, list) or not types or any(type(t) is not str or t not in DOCUMENT_TYPES for t in types):
         raise BadRequest("Select at least one supported document type.")
     types = list(dict.fromkeys(types))
+    prior_state = claim.status
+    claim.information_request = {"document_types": types, "requested_at": utcnow().isoformat(),
+        "existing_document_ids": [document.id for document in claim.documents]}
     claim.status, claim.manual_review_required = "additional_information_required", False
     if current_user.role == "reviewer":
         claim.assigned_reviewer_id = current_user.id
     db.session.add(Review(claim_id=claim.id, reviewer_user_id=current_user.id,
         decision="request_information", comments="Requested documents: " + ", ".join(types)))
     NotificationService().send_information_requested(claim, types)
-    audit("review.documents_requested", claim, new={"document_types": types}, claim_id=claim.id)
+    audit("review.documents_requested", claim, old={"status": prior_state},
+        new={"status": claim.status, "document_types": types}, claim_id=claim.id)
     db.session.commit()
     return {"claim_id": claim.id, "status": claim.status, "requested": types}
 
 
 @bp.post("/reviewer/claims/<int:claim_id>/remind")
-@role_required("reviewer")
+@role_required("reviewer", "admin")
 @limiter.limit("10 per hour")
 def remind(claim_id):
     claim = visible_claim(claim_id, include_info=True)
@@ -234,7 +238,7 @@ def remind(claim_id):
 
 
 @bp.post("/reviewer/claims/<int:claim_id>/resume")
-@role_required("reviewer")
+@role_required("reviewer", "admin")
 def resume(claim_id):
     claim = visible_claim(claim_id, lock=True, include_info=True)
     if claim.status != "additional_information_required":
@@ -247,7 +251,7 @@ def resume(claim_id):
 
 
 @bp.post("/reviewer/duplicates/decision")
-@role_required("reviewer")
+@role_required("reviewer", "admin")
 def decide_duplicate():
     data = request.get_json(silent=True) or {}
     left, right, digest, status = (data.get(k) for k in
@@ -258,8 +262,8 @@ def decide_duplicate():
         raise BadRequest("Provide two claim IDs, an exact file hash and a valid decision.")
     digest = digest.lower()
     first, second = sorted((left, right))
-    if current_user.role != "admin" and not db.session.scalar(select(Claim.id).where(
-            Claim.id.in_((first, second)), review_scope(current_user.id)).limit(1)):
+    if current_user.role != "admin" and db.session.scalar(select(func.count()).select_from(Claim).where(
+            Claim.id.in_((first, second)), review_scope(current_user.id))) != 2:
         raise NotFound("Duplicate warning not found.")
     pairs = duplicate_pairs()
     if db.session.scalar(select(pairs.c.claim_id).where(pairs.c.claim_id == first,

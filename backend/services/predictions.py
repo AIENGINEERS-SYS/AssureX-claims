@@ -155,10 +155,10 @@ class PythonPredictionService:
     model_type = "python"
 
     def predict(self, claim, policy):
-        path = Path(current_app.config["PYTHON_MODEL_PATH"])
-        version = _artifact_version(path)
-        bundle = _load_python(str(path.resolve()), path.stat().st_mtime_ns)
         try:
+            path = Path(current_app.config["PYTHON_MODEL_PATH"])
+            version = _artifact_version(path)
+            bundle = _load_python(str(path.resolve()), path.stat().st_mtime_ns)
             import pandas as pd
             frame = pd.DataFrame([python_features(claim, policy, bundle["feature_columns"])],
                                  columns=bundle["feature_columns"])
@@ -213,6 +213,24 @@ def _gtm_labels(model_path, artifact_version=None):
     return list(_load_gtm_labels(str(metadata.resolve()), cache_version))
 
 
+def warm_available_models(app):
+    """Warm existing adapters without DB writes; preserve partial availability."""
+    for kind, key in (("python", "PYTHON_MODEL_PATH"), ("gtm", "GTM_MODEL_PATH")):
+        if kind == "gtm" and app.config.get("GTM_PREDICTOR"):
+            continue
+        try:
+            path = Path(app.config[key])
+            if kind == "python":
+                _load_python(str(path.resolve()), path.stat().st_mtime_ns)
+            else:
+                version = _artifact_version(path)
+                _load_gtm(str(path.resolve()), version)
+                _gtm_labels(path, version)
+        except Exception as exc:
+            # The normal adapters record an unavailable stage on the evaluation.
+            app.logger.warning("model_warm_unavailable model=%s error_type=%s", kind, type(exc).__name__)
+
+
 def preload_models(app):
     """Warm both model caches once per application worker.
 
@@ -250,12 +268,12 @@ class GTMPredictionService:
     model_type = "gtm"
 
     def predict(self, claim, policy):
-        model_path = Path(current_app.config["GTM_MODEL_PATH"])
-        version = _artifact_version(model_path)
-        card = claim_card_path(claim, policy, current_app.config["MODEL_CARD_PATH"])
-        started = time.perf_counter()
-        predictor = current_app.config.get("GTM_PREDICTOR")
         try:
+            model_path = Path(current_app.config["GTM_MODEL_PATH"])
+            version = _artifact_version(model_path)
+            card = claim_card_path(claim, policy, current_app.config["MODEL_CARD_PATH"])
+            started = time.perf_counter()
+            predictor = current_app.config.get("GTM_PREDICTOR")
             if predictor:
                 raw = predictor(str(card))
             else:

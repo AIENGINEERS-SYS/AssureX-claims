@@ -1,5 +1,12 @@
 # Automated claim evaluation
 
+Claim submission now queues this service automatically. See
+[assessment lifecycle](assessment-lifecycle.md) for the durable worker, bounded
+retries, frozen report versions and claim-specific customer report endpoints.
+Automated recommendations are stored on evaluation rows; `final_decision` is
+reserved for authorized human review. Employees and reviewers require an explicit
+claim assignment, and administrator access is explicitly declared on handlers.
+
 AssureX evaluates non-draft claims through independent Python and GTM adapters. A failure in one adapter is
 recorded in `evaluation_results.model_errors`; it does not roll back a successful result from the other adapter.
 

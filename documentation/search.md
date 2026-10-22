@@ -21,7 +21,7 @@ Filters are ANDed across fields; each multi-select uses OR within that field. Bo
 
 - Customers: their own claims, products and warranties.
 - Employees: assigned claims and the products/warranties referenced by those claims.
-- Reviewers: assigned claims plus unassigned claims with `status=manual_review` and `manual_review_required=true`. Other reviewers' assignments remain hidden. Products and warranties are restricted to these visible claims.
+- Reviewers: only explicitly assigned claims. Unassigned claims and other reviewers' assignments remain hidden. Products and warranties are restricted to these visible claims.
 - Administrators: all records.
 
 `/api/review/search` requires reviewer/admin access and restricts results to the current manual-review queue. `/api/claims/search` also allows reviewers to find their assigned claim history. Grouped Users results expose only ID, display name and role: non-admins see themselves and people connected to their visible claims. They cannot enumerate an unrelated customer directory. Emails, passwords, storage paths and model artifact locations are never returned by search.
@@ -142,7 +142,7 @@ Authorization: Bearer <access_token>
 {"advanced":{"claim_status":["manual_review"],"category":["computers"],"max_confidence":0.7,"date_preset":"30d"}}
 ```
 
-The Reports `advanced` object accepts the same normalized filter schema and restricts claim, product and warranty sections using the shared SQL builder. Existing report parameters still work and combine with these filters. Pagination never limits exported records; exports retain their stable record-ID order. Relative report date ranges are fixed to concrete dates when requested, so a queued job does not silently move to a different day. The existing reporting authorization is deliberately stricter for reviewers: only assigned claims can be exported, even though eligible unassigned cases are searchable. Report access is checked again during generation and download.
+The Reports `advanced` object accepts the same normalized filter schema and restricts claim, product and warranty sections using the shared SQL builder. Existing report parameters still work and combine with these filters. Pagination never limits exported records; exports retain their stable record-ID order. Relative report date ranges are fixed to concrete dates when requested, so a queued job does not silently move to a different day. Search and reporting both enforce explicit reviewer assignment. Report access is checked again during generation and download.
 
 ## Telemetry and retention
 

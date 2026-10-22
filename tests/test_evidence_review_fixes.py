@@ -3,7 +3,8 @@ from types import SimpleNamespace
 from PIL import Image
 from io import BytesIO
 import pytest
-from backend.db.models import Document
+from backend.db.models import Claim, Document
+from sqlalchemy import select
 from backend.extensions import db
 from backend.services.ocr_service import OCRResult
 from test_auth import app, client, accounts, claims, bearer, login
@@ -153,6 +154,12 @@ def test_unassessed_photos_escalate_even_when_both_models_agree(client,app,heade
     for kind,color in [('product_image','red'),('damage_evidence','blue')]:
         claim = upload(client,headers,claim,kind,content=png(color)).json['claim']
     claim = submit(client,headers,claim).json['claim']
+    # A submitted customer claim does not implicitly grant every reviewer access.
+    with app.app_context():
+        from backend.db.models import User
+        stored = db.session.get(Claim, claim['id'])
+        stored.assigned_reviewer_id = db.session.scalar(select(User.id).where(User.role == 'reviewer'))
+        db.session.commit()
     response = client.post(f"/api/claims/{claim['id']}/evaluate",headers=bearer(login(client,'reviewer')['access_token']))
     assert response.status_code == 201,response.json
     assert response.json['evaluation']['recommendation'] == 'manual_review_required'
@@ -300,7 +307,7 @@ def test_reused_internal_document_id_cannot_expose_another_users_evidence(client
 
 
 def test_committed_upload_is_reloaded_by_public_identity_before_processing(client,app,headers,claims,monkeypatch):
-    from backend.api import documents as endpoint
+    from backend.services import document_uploads as endpoint
     original_reload=endpoint.processing_document
     intercepted=[]
     def replace_before_reload(identifier,public_id,claim_id):

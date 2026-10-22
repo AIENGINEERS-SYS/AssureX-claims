@@ -73,7 +73,8 @@ def claims(app, accounts):
             db.session.flush()
             claim = Claim(user_id=accounts[role], product_id=product.id, warranty_id=warranty.id,
                 fault_date=date.today(), fault_type="power", fault_description="No power", status="submitted",
-                assigned_employee_id=accounts["employee"] if role == "customer" else None)
+                assigned_employee_id=accounts["employee"] if role == "customer" else None,
+                assigned_reviewer_id=accounts["reviewer"] if role == "customer" else None)
             db.session.add(claim)
             db.session.flush()
             result[role] = {"claim": claim.id, "product": product.id, "warranty": warranty.id}

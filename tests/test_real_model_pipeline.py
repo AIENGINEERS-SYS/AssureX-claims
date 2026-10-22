@@ -118,6 +118,11 @@ def test_real_models_feed_comparison_and_final_evaluation(client, app, claims):
     reviewer = auth(client, "reviewer")
     claim_id = claims["other"]["claim"]
 
+    from backend.db.models import Claim, User
+    with app.app_context():
+        db.session.get(Claim, claim_id).assigned_reviewer_id = db.session.scalar(select(User.id).where(User.role == "reviewer"))
+        db.session.commit()
+
     response = client.post(f"/api/claims/{claim_id}/evaluate", headers=reviewer)
     assert response.status_code == 201, response.json
 

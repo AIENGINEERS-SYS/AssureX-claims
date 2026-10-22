@@ -712,7 +712,8 @@ def test_unconfigured_category_keeps_python_feature_derivation_safe(app, client,
 
 def test_evaluation_of_a_claim_without_a_product_is_rejected(client, app, claims, accounts):
     with app.app_context():
-        orphan = Claim(user_id=accounts["customer"], status="submitted", fault_description="x")
+        orphan = Claim(user_id=accounts["customer"], status="submitted", fault_description="x",
+            assigned_reviewer_id=accounts["reviewer"])
         db.session.add(orphan)
         db.session.commit()
         orphan_id = orphan.id
@@ -721,11 +722,22 @@ def test_evaluation_of_a_claim_without_a_product_is_rejected(client, app, claims
     assert response.json["error"]["code"] == "conflict"
 
 
-def test_repeat_evaluations_keep_every_history_row(app, client, claims):
+def test_repeat_evaluations_reuse_identical_inputs_and_preserve_changed_history(app, client, claims, tmp_path):
+    app.config.update(GTM_PREDICTOR=lambda path: [.85, .1, .05], MODEL_CARD_PATH=str(tmp_path / "cards"))
     reviewer = auth(client, "reviewer")
+    identities = []
     for _ in range(2):
-        assert client.post(f"/api/claims/{claims['customer']['claim']}/evaluate",
-                           headers=reviewer).status_code == 201
+        response = client.post(f"/api/claims/{claims['customer']['claim']}/evaluate", headers=reviewer)
+        assert response.status_code == 201, response.json
+        identities.append(response.json["evaluation"]["evaluation_id"])
+    assert identities[0] == identities[1]
+    with app.app_context():
+        assert db.session.query(EvaluationResult).filter_by(claim_id=claims["customer"]["claim"]).count() == 1
+        db.session.get(Claim, claims["customer"]["claim"]).fault_description = "Updated fault evidence"
+        db.session.commit()
+    updated = client.post(f"/api/claims/{claims['customer']['claim']}/evaluate", headers=reviewer)
+    assert updated.status_code == 201, updated.json
+    assert updated.json["evaluation"]["evaluation_id"] != identities[0]
     with app.app_context():
         assert db.session.query(EvaluationResult).filter_by(
             claim_id=claims["customer"]["claim"]).count() == 2

@@ -8,7 +8,7 @@ from sqlalchemy.orm import aliased, selectinload
 from backend.db.models import (Claim, Document, DuplicateInvestigation, GTMPrediction,
     ModelVersion, Notification, Product, PythonPrediction, Review, RuleResult, User, Warranty)
 from backend.extensions import db
-from backend.api.claim_schemas import REQUIRED_DOCUMENTS
+from backend.schemas.claims import REQUIRED_DOCUMENTS
 from .document_service import public_document_type, stored_document_type
 from .evidence import required_documents
 from .warranty_calculations import current_date
@@ -135,8 +135,7 @@ def disagreement_condition(py, gtm):
 
 def review_scope(user_id, admin=False, claim=Claim):
     scope = and_(claim.status == "manual_review", claim.manual_review_required.is_(True))
-    return scope if admin else and_(scope, or_(claim.assigned_reviewer_id.is_(None),
-        claim.assigned_reviewer_id == user_id))
+    return scope if admin else and_(scope, claim.assigned_reviewer_id == user_id)
 
 
 def duplicate_pairs(user_id=None):
@@ -146,7 +145,7 @@ def duplicate_pairs(user_id=None):
             first.claim_id < second.claim_id)).join(Claim, Claim.id == first.claim_id).join(
         other, other.id == second.claim_id).where(Claim.status != "draft", other.status != "draft")
     if user_id is not None:
-        query = query.where(or_(review_scope(user_id), review_scope(user_id, claim=other)))
+        query = query.where(review_scope(user_id), review_scope(user_id, claim=other))
     return query.distinct().subquery()
 
 

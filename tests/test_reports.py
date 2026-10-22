@@ -96,6 +96,9 @@ def test_customer_reports_hide_internal_review_and_model_details(app, client, ac
 def test_reviewer_scope_is_assignment_only(app, client, accounts, claims):
     headers = auth(client, 'reviewer')
     claim_id = claims['customer']['claim']
+    with app.app_context():
+        db.session.get(Claim, claim_id).assigned_reviewer_id = None
+        db.session.commit()
     assert client.get(f'/api/reports/claim/{claim_id}', headers=headers).status_code == 404
     with app.app_context():
         claim = db.session.get(Claim, claim_id)

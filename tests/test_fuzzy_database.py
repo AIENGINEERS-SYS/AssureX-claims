@@ -428,10 +428,14 @@ def test_duplicate_pairs_must_be_ordered_and_unique(app, accounts):
 
 def test_review_rows_persist_override_and_previous_decision(app, client, accounts):
     ids = seed_claim(app, user_id=accounts["customer"], status="manual_review")
-    with rw(app):
-        db.session.get(Claim, ids["claim"]).manual_review_required = True
-        db.session.commit()
     reviewer = auth(client, "reviewer")
+    assert client.post(f"/api/review/{ids['claim']}/override", headers=reviewer,
+        json={"decision": "reject", "notes": "double claim", "override_reason": "duplicate invoices"}).status_code == 404
+    with rw(app):
+        claim = db.session.get(Claim, ids["claim"])
+        claim.manual_review_required = True
+        claim.assigned_reviewer_id = accounts["reviewer"]
+        db.session.commit()
     response = client.post(f"/api/review/{ids['claim']}/override", headers=reviewer,
                            json={"decision": "reject", "notes": "double claim",
                                  "override_reason": "duplicate invoices"})

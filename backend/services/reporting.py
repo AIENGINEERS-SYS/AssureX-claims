@@ -62,10 +62,8 @@ def json_value(value):
 
 
 def claim_access(user):
-    return {'customer': Claim.user_id == user.id,
-            'employee': Claim.assigned_employee_id == user.id,
-            'reviewer': Claim.assigned_reviewer_id == user.id,
-            'admin': True}.get(user.role, false())
+    from .access import claim_scope
+    return claim_scope(user)
 
 
 def product_access(user):

@@ -67,7 +67,7 @@ def reviewer(entity_id):
 
 
 @bp.get('/administrative')
-@authenticated
+@role_required('admin')
 def administrative():
     return generate_preview('administrative')
 

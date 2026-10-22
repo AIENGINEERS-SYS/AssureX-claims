@@ -38,12 +38,22 @@ def add_document(app, claim_id, uploader, kind, *, verified=None, extracted=None
                  document_type=None, status="confirmed"):
     """Insert a document directly, translating the public upload name to the stored name."""
     with app.app_context():
+        from hashlib import sha256
+        from io import BytesIO
+        from PIL import Image
+        from backend.services.claim_storage import storage
+        seed = next(HASHES)
+        stream = BytesIO()
+        Image.new("RGB", (8, 8), (seed % 256, (seed // 256) % 256, 100)).save(stream, format="PNG")
+        content = stream.getvalue()
+        key = f"fuzzy/{next(IDS)}-{kind}.png"
+        storage().save(key, content, "image/png")
         row = Document(claim_id=claim_id, uploaded_by=uploader,
             document_type=document_type or STORED_TYPE.get(kind, kind),
             original_filename=f"{kind}.png", stored_filename=f"{next(IDS)}-{kind}.png",
-            mime_type="image/png", file_size=1024,
-            storage_path=f"fuzzy/{next(IDS)}-{kind}.png",
-            file_hash=f"{next(HASHES):064d}", upload_status="stored", ocr_status="completed",
+            mime_type="image/png", file_size=len(content),
+            storage_path=key,
+            file_hash=sha256(content).hexdigest(), upload_status="stored", ocr_status="completed",
             review_status=status, verified_data=verified, extracted_data=extracted)
         db.session.add(row)
         db.session.commit()

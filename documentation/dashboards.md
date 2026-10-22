@@ -1,6 +1,6 @@
 # Phase 23 dashboards
 
-AssureX exposes `/dashboard/customer`, `/dashboard/reviewer`, and `/dashboard/admin` as browser routes. The API service redirects these paths to the standalone React service configured by `FRONTEND_URL`, preserving deep links and query strings. The supplied design informs the dark green navigation, lime actions, light cards, and status chips. The HTML shell is public; **all dashboard data APIs require JWT**. Customers see only their own records, reviewers see unassigned or assigned cases, and administrators can inspect a customer view using `user_id`.
+AssureX exposes `/dashboard/customer`, `/dashboard/reviewer`, and `/dashboard/admin` as browser routes. The API service redirects these paths to the standalone React service configured by `FRONTEND_URL`, preserving deep links and query strings. The supplied design informs the dark green navigation, lime actions, light cards, and status chips. The HTML shell is public; **all dashboard data APIs require JWT**. Customers see only their own records, reviewers see only their explicitly assigned cases, and administrators can inspect a customer view using `user_id`.
 
 ## Start locally
 

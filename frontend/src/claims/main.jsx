@@ -6,6 +6,7 @@ import {DocumentsStep, ReviewStep} from './components';
 import Wizard from './Wizard';
 import {createMutationQueue} from './mutationQueue';
 import SearchWorkspace from '../search/SearchWorkspace';
+import AssessmentPanel from './AssessmentPanel';
 import './styles.css';
 
 function Login({signedIn, expectedUser}) {
@@ -28,7 +29,7 @@ function Login({signedIn, expectedUser}) {
     <p>Need an account or a product? <a href="/products">Visit your products</a>.</p></section>;
 }
 
-function ClaimList() {
+function ClaimList({user}) {
   const [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const navigate = useNavigate();
   async function start() {
@@ -39,7 +40,7 @@ function ClaimList() {
   return <><div className="title-row"><div><p className="eyebrow">HERE WHEN YOU NEED US</p><h1>My claims</h1><p>Find a claim, resume a draft, or follow its progress.</p></div>
     <button className="primary" onClick={start} disabled={busy}>{busy ? 'Starting...' : 'New claim'}</button></div>
     {error && <p className="error" role="alert">{error}</p>}
-    <SearchWorkspace user={getSession().user} initialScope="claims" embedded onOpen={path => {
+    <SearchWorkspace user={user} initialScope="claims" embedded onOpen={path => {
       if (path.startsWith('/claims/')) navigate(path.slice('/claims'.length));
       else {window.history.pushState(null, '', path);window.dispatchEvent(new PopStateEvent('popstate'));}
     }}/>
@@ -58,7 +59,8 @@ function ClaimDetails() {
     }).catch(err => {if (!cancelled) setError(errorMessage(err));});
     return () => {cancelled = true; active.current = false;};
   }, [claimId]);
-  const processing = claim?.documents.some(document => ['pending', 'processing'].includes(document.ocr_status));
+  const processing = claim?.documents.some(document => ['pending', 'processing'].includes(document.ocr_status)) ||
+    ['queued', 'running', 'retry_wait'].includes(claim?.assessment?.status);
   useEffect(() => {
     if (!processing || busy) return;
     let observing = true;
@@ -110,10 +112,15 @@ function ClaimDetails() {
   function review(id, corrections) {change(latest => api.patch(`/documents/${id}/ocr-review`, {...Object.fromEntries(Object.entries(corrections).map(([key,value]) =>
     [key, value === '' ? null : key === 'warranty_duration' ? Number(value) : value])), confirm: true, version: latest.version}));}
   function retry(id) {change(latest => api.post(`/documents/${id}/ocr/retry`, {version: latest.version}));}
+  async function refreshClaim() {
+    const {data} = await api.get(`/claims/${current.current.id}`);
+    if (active.current && !pending.current) {current.current = data.claim; setClaim(data.claim);}
+  }
   return <>{error && <p role="alert" className="error">{error}</p>}{claim ? <><div className="confirmation"><p className="eyebrow">WE HAVE YOUR CLAIM</p><h1>{claim.claim_id}</h1>
     <p>Status: <strong>{claim.status.replaceAll('_', ' ')}</strong></p><p>Submitted {claim.submitted_at ? new Date(claim.submitted_at).toLocaleString() : claim.submission_date || 'Previously'}</p>
     <Link to="/">Back to my claims</Link></div>{claim.status === 'ADDITIONAL_INFORMATION_REQUIRED' && <div className="panel"><p>Additional evidence was requested. Upload it here for your reviewer.</p>
       <DocumentsStep documents={claim.documents} upload={upload} review={review} retry={retry} progress={progress} busy={busy} policy={claim.document_policy} required={claim.document_policy?.required_types} canRemove={false}/></div>}
+    <AssessmentPanel claim={claim} onRefresh={refreshClaim}/>
     <div className="panel"><ReviewStep claim={claim} product={claim.product} values={claim}/></div></> : !error && <p role="status">Loading claim…</p>}</>;
 }
 
@@ -135,7 +142,7 @@ export function App({basePath = '/claims'} = {}) {
     <nav aria-label="Main navigation"><a href="/products">Products</a><Link to="/" aria-current="page">Claims</Link><a href="/reports">Reports</a><a href="/search">Search</a></nav>
     {user && <div className="account"><span>{user.full_name}</span><button onClick={signOut}>Sign out</button></div>}</header>
     {needsLogin && user && <div className="reauth" role="dialog" aria-modal="true" aria-label="Sign in again"><Login expectedUser={user} signedIn={() => setNeedsLogin(false)}/></div>}
-    <main id="main" inert={needsLogin && user ? true : undefined}>{user ? <Routes><Route path="/" element={<ClaimList/>}/><Route path="/draft/:id" element={<DraftRoute/>}/>
+    <main id="main" inert={needsLogin && user ? true : undefined}>{user ? <Routes><Route path="/" element={<ClaimList user={user}/>}/><Route path="/draft/:id" element={<DraftRoute/>}/>
       <Route path="/:claimId" element={<DetailRoute/>}/><Route path="*" element={<p>Page not found. <Link to="/">My claims</Link></p>}/></Routes> : <Login signedIn={setUser}/>}</main>
     <footer>AssureX · Product protection, made simple</footer></BrowserRouter>;
 }

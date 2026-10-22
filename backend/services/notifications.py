@@ -31,6 +31,7 @@ class NotificationType(StrEnum):
     CLAIM_IN_REVIEW = "CLAIM_IN_REVIEW"
     CLAIM_APPROVED = "CLAIM_APPROVED"
     CLAIM_REJECTED = "CLAIM_REJECTED"
+    REPORT_AVAILABLE = "REPORT_AVAILABLE"
 
 
 class NotificationPriority(StrEnum):
@@ -48,6 +49,7 @@ PREFERENCE_FIELD = {
     NotificationType.CLAIM_IN_REVIEW: "review_notifications",
     NotificationType.CLAIM_APPROVED: "claim_updates",
     NotificationType.CLAIM_REJECTED: "claim_updates",
+    NotificationType.REPORT_AVAILABLE: "claim_updates",
 }
 
 
@@ -220,6 +222,14 @@ class NotificationService:
             if self._existing(dedupe_key):
                 return None
             raise
+
+    def send_report_available(self, claim, report):
+        return self.create_notification(user_id=claim.user_id,
+            notification_type=NotificationType.REPORT_AVAILABLE,
+            title="Assessment report available",
+            message=f"Your assessment report for {claim.claim_id} is ready. An automated recommendation is not a final claim decision.",
+            reference_type="claim", reference_id=claim.claim_id, claim_id=claim.id,
+            dedupe_key=f"report:{report.id}:available")
 
     def send_claim_submitted(self, claim: Claim) -> Notification | None:
         return self.create_notification(

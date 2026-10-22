@@ -75,7 +75,10 @@ try {
   session = (await call("Target.attachToTarget",{targetId:target.targetId,flatten:true},null)).sessionId;
   await call("Page.enable"); await call("Runtime.enable"); await call("Log.enable");
   await call("Emulation.setDeviceMetricsOverride",{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
-  if (scenario === "search") {
+  if (scenario === "roles") {
+    const {runRoles} = await import('./browser_roles.mjs');
+    await runRoles({baseURL,call,click,fill,wait,has,evaluate,screenshot,pause});
+  } else if (scenario === "search") {
     const {runSearch} = await import('./browser_search.mjs');
     await runSearch({baseURL,call,click,fill,wait,has,evaluate,screenshot,pause});
   } else if (scenario === "reports") {

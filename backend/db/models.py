@@ -151,6 +151,7 @@ class Claim(Timestamps, Base):
     status: Mapped[str] = mapped_column(String(40), default="draft", index=True, nullable=False)
     final_decision: Mapped[str | None] = mapped_column(String(32))
     manual_review_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    information_request: Mapped[dict | None] = mapped_column(JSON)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     user: Mapped[User] = relationship(back_populates="claims", foreign_keys=[user_id])
     product: Mapped[Product] = relationship(back_populates="claims")

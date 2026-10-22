@@ -285,7 +285,7 @@ claimant, product model, description similarity, and claim dates. Related claim 
 5. Inspect model comparison, policies, rules, contradictions, duplicate signals, and prior actions.
 6. Assign a reviewer, add notes, request evidence, approve, reject, or explicitly override with a reason.
 
-The queue contains claims whose status is `manual_review` and whose `manual_review_required` flag is true. Administrators can see all eligible cases; reviewers see unassigned cases and cases assigned to them.
+The queue contains claims whose status is `manual_review` and whose `manual_review_required` flag is true. Administrators can see all eligible cases; reviewers see only cases explicitly assigned to them.
 
 ## Access the administrator dashboard
 

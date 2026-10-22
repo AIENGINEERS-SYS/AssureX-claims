@@ -74,9 +74,21 @@ export async function runClaims({baseURL, call, click, fill, wait, has, evaluate
   await screenshot('phase5-review-mobile.png');
   await button('Submit claim');
   await wait("/^CLM-\\d{4}-\\d{6,}$/.test(document.querySelector('h1')?.textContent || '')");
-  assert.ok(await evaluate("document.querySelector('.confirmation').textContent.includes('SUBMITTED')"));
+  await wait("!!document.querySelector('.assessment-panel')");
   await screenshot('phase5-confirmation.png');
   await call('Page.reload');
   await login();
-  await wait("document.querySelector('.confirmation')?.textContent.includes('SUBMITTED')");
+  await wait("!!document.querySelector('.confirmation')");
+  await wait("Array.from(document.querySelectorAll('.assessment-panel button')).some(button => button.textContent === 'View Assessment Report')");
+  await evaluate("Array.from(document.querySelectorAll('.assessment-panel button')).find(button => button.textContent === 'View Assessment Report').click()");
+  await wait("!!document.querySelector('article[aria-label=\"Assessment report\"]')");
+  assert.ok(await evaluate("document.querySelector('.assessment-panel').textContent.includes('recommendation')"));
+  assert.equal(await evaluate('window.attacked'), undefined);
+  assert.ok(await evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'));
+  await screenshot('assessment-report-mobile.png');
+  await evaluate("(async () => {const {api}=await import('/src/claims/api.js'); await api.post('/auth/logout'); try {await api.get('/claims/my');} catch {}})()");
+  await wait("!!document.querySelector('[aria-label=\"Sign in again\"]')");
+  await login();
+  await wait("!document.querySelector('[aria-label=\"Sign in again\"]')");
+  assert.ok(await evaluate("!!document.querySelector('article[aria-label=\"Assessment report\"]')"));
 }

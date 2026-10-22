@@ -15,18 +15,7 @@ def nonblank(value):
         raise ValidationError("Must not be blank.")
 
 
-class StrictSchema(Schema):
-    @pre_load
-    def normalize(self, data, **kwargs):
-        if not isinstance(data, dict):
-            raise ValidationError("Expected a JSON object.")
-        data = dict(data)
-        for key in ("email", "full_name"):
-            if isinstance(data.get(key), str):
-                data[key] = data[key].strip()
-        if isinstance(data.get("email"), str):
-            data["email"] = data["email"].lower()
-        return data
+from backend.schemas.http import StrictSchema
 
 
 class RegisterSchema(StrictSchema):
@@ -71,6 +60,10 @@ class ClaimSchema(StrictSchema):
 class StatusSchema(StrictSchema):
     status = fields.String(required=True, validate=validate.OneOf([
         "under_evaluation", "additional_information_required", "manual_review"]))
+    reason = fields.String(validate=[validate.Length(min=1, max=2000), nonblank])
+    document_types = fields.List(fields.String(validate=validate.OneOf([
+        "receipt", "invoice", "product_image", "serial_number_image", "damage_evidence", "fault_evidence",
+        "warranty_card", "diagnostic_report", "repair_report", "other"])), validate=validate.Length(min=1, max=10))
 
 
 class AssignmentSchema(StrictSchema):

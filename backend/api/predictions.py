@@ -21,14 +21,13 @@ def _loaded_claim(claim_id):
     query = select(Claim).where(Claim.id == claim_id, Claim.status != "draft").options(
         joinedload(Claim.product), joinedload(Claim.warranty), selectinload(Claim.documents),
         selectinload(Claim.repairs))
-    if current_user.role == "employee":
-        query = query.where(Claim.assigned_employee_id == current_user.id)
-    elif current_user.role == "reviewer":
-        query = query.where((Claim.assigned_reviewer_id.is_(None)) |
-                            (Claim.assigned_reviewer_id == current_user.id))
+    from backend.services.access import claim_scope
+    query = query.where(claim_scope(current_user))
     claim = db.session.scalar(query)
     if claim is None:
         raise NotFound("Claim not found.")
+    if claim.status in {"approved", "rejected", "closed"}:
+        raise Conflict("Finalized claims cannot be re-evaluated.")
     if claim.product is None:
         raise Conflict("Claim has no registered product to evaluate.")
     return claim
@@ -67,75 +66,39 @@ def _run_single(kind):
 
 
 @bp.post("/predict/python")
-@role_required("employee", "reviewer")
+@role_required("employee", "reviewer", "admin")
 @limiter.limit("20 per minute")
 def python_prediction():
     return _run_single("python")
 
 
 @bp.post("/predict/gtm")
-@role_required("employee", "reviewer")
+@role_required("employee", "reviewer", "admin")
 @limiter.limit("20 per minute")
 def gtm_prediction():
     return _run_single("gtm")
 
 
 @bp.post("/claims/<int:claim_id>/evaluate")
-@role_required("employee", "reviewer")
+@role_required("employee", "reviewer", "admin")
 @limiter.limit("10 per minute")
 def evaluate(claim_id):
     started = monotonic()
     claim = _loaded_claim(claim_id)
-    previous_status = claim.status
-    item, rules, policy = ClaimEvaluationService().evaluate(claim)
-    # Link the invoking user to immutable inference records created by the
-    # combined evaluation, without duplicating raw OCR/document evidence.
-    for kind, record in (("python", item.python_prediction), ("gtm", item.gtm_prediction)):
-        if record is not None:
-            audit(f"prediction.{kind}", record, new={
-                "prediction_class": record.predicted_class,
-                "confidence": {
-                    "valid": record.confidence_valid,
-                    "invalid": record.confidence_invalid,
-                    "manual_review": record.confidence_manual_review,
-                },
-                "model_version": record.model_version.version,
-                "inference_duration_ms": record.inference_duration_ms,
-                "source": "claim_evaluation",
-            }, claim_id=claim.id)
-    audit("rule.executed", item, new={
-        "policy_code": policy.code,
-        "policy_version": policy.version,
-        "rule_count": len(rules),
-        "results": {rule["rule_code"]: rule["result"] for rule in rules},
-    }, claim_id=claim.id)
-    audit("claim.evaluate", item, new={"status": item.status, "recommendation": item.recommendation},
-          claim_id=claim.id)
-    if claim.status != previous_status:
-        audit("claim.status_changed", claim, old={"status": previous_status},
-              new={"status": claim.status, "source": "claim_evaluation"}, claim_id=claim.id)
-    db.session.commit()
+    from backend.services.assessments import evaluate_now
+    item, snapshot = evaluate_now(claim, current_user)
     total_ms = round((monotonic() - started) * 1000)
     target_ms = current_app.config["MODEL_PERFORMANCE_TARGET_MS"]
-    performance = {"total_duration_ms": total_ms, "target_ms": target_ms,
-                   "within_target": total_ms <= target_ms}
-    log = current_app.logger.info if total_ms <= target_ms else current_app.logger.warning
-    log("claim_evaluation_complete claim_id=%s total_ms=%s target_ms=%s",
-        claim.id, total_ms, target_ms)
-    return {"evaluation": evaluation_json(item), "policy": policy.as_dict(), "rules": rules,
-            "performance": performance}, 201
+    return {"evaluation": evaluation_json(item), "policy": snapshot["policy"], "rules": snapshot["rules"],
+        "performance": {"total_duration_ms": total_ms, "target_ms": target_ms,
+                        "within_target": total_ms <= target_ms}}, 201
 
 
 @bp.get("/claims/<int:claim_id>/decision")
-@role_required("customer", "employee", "reviewer")
+@role_required("customer", "employee", "reviewer", "admin")
 def decision(claim_id):
-    claim = db.session.get(Claim, claim_id)
-    if claim is None or (current_user.role == "customer" and claim.user_id != current_user.id):
-        raise NotFound("Claim not found.")
-    if current_user.role == "employee" and claim.assigned_employee_id != current_user.id:
-        raise NotFound("Claim not found.")
-    if current_user.role == "reviewer" and claim.assigned_reviewer_id not in (None, current_user.id):
-        raise NotFound("Claim not found.")
+    from backend.services.access import get_claim
+    claim = get_claim(claim_id, current_user)
     item = latest_evaluation(claim.id)
     if item is None:
         raise NotFound("This claim has not been evaluated.")

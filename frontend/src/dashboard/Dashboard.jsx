@@ -5,6 +5,8 @@ import {Bell, Box, CheckCheck, ChevronRight, ClipboardList, FileText, LayoutDash
   Plus, Search, Shield, ShieldAlert, Trash2, Users} from 'lucide-react';
 import {api, errorMessage, getSession, onExpired, setSession} from '../claims/api';
 import {GlobalSearchBar} from '../search/SearchApp';
+import StaffWorkspace from '../staff/StaffWorkspace';
+import AccessDenied from '../auth/AccessDenied';
 
 const Chart = React.lazy(() => import('./Charts'));
 const label = value => String(value ?? '').replaceAll('_', ' ').replace(/\b\w/g, char => char.toUpperCase());
@@ -232,7 +234,7 @@ function ReviewModal({item, role, onClose}) {
       {role === 'admin' && <><label htmlFor="reviewer-id">Assign active reviewer ID</label><input id="reviewer-id" type="number" min="1" value={reviewerId} onChange={e => setReviewerId(e.target.value)}/></>}
       {data.claim.status === 'additional_information_required' ? <div className="modal-actions"><button disabled={mutation.isPending} onClick={() => perform(`/dashboard/reviewer/claims/${item.id}/remind`, {})}>Send reminder</button>
         <button className="lime-button" disabled={mutation.isPending} onClick={() => perform(`/dashboard/reviewer/claims/${item.id}/resume`, {})}>Resume review</button></div> : <>
-        <div className="modal-actions"><button disabled={mutation.isPending || (role === 'admin' && !reviewerId)} onClick={() => perform(`/dashboard/reviewer/claims/${item.id}/assignment`, role === 'admin' ? {reviewer_id: Number(reviewerId)} : {}, 'patch')}>Assign reviewer</button>
+        <div className="modal-actions">{role === 'admin' && <button disabled={mutation.isPending || !reviewerId} onClick={() => perform(`/dashboard/reviewer/claims/${item.id}/assignment`, {reviewer_id: Number(reviewerId)}, 'patch')}>Assign reviewer</button>}
         <button className="lime-button" disabled={mutation.isPending || !notes.trim()} onClick={() => perform(`/review/${item.id}/approve`, {notes})}>Approve</button>
         <button disabled={mutation.isPending || !notes.trim()} onClick={() => perform(`/review/${item.id}/reject`, {notes, rejection_reason: rejectionReason})}>Reject</button>
         <button disabled={mutation.isPending || !notes.trim()} onClick={() => perform(`/review/${item.id}/notes`, {notes})}>Add notes</button></div>
@@ -304,11 +306,12 @@ function Login({onLogin}) {
 }
 
 function Shell({user, signOut, children}) {
-  const role = user.role, location = useLocation(), home = role === 'admin' ? '/dashboard/admin' : role === 'reviewer' ? '/dashboard/reviewer' : role === 'employee' ? '/dashboard/notifications' : '/dashboard/customer';
+  const role = user.role, location = useLocation(), home = role === 'admin' ? '/dashboard/admin' : role === 'reviewer' ? '/dashboard/reviewer' : role === 'employee' ? '/dashboard/employee' : '/dashboard/customer';
   const links = [...(role === 'employee' ? [] : [{href: home, title: 'Overview', icon: LayoutDashboard}]),
     ...(role === 'customer' ? [{href: '/products', title: 'My products', icon: Box}, {href: '/claims', title: 'Claims', icon: ClipboardList}] : []),
     ...(role === 'reviewer' ? [{href: '#queue', title: 'Review queue', icon: ClipboardList}] : []),
-    ...(role === 'admin' ? [{href: '/dashboard/reviewer', title: 'Reviewer workspace', icon: ShieldAlert}] : []),
+    ...(role === 'admin' ? [{href: '/dashboard/reviewer', title: 'Reviewer workspace', icon: ShieldAlert}, {href: '/dashboard/operations', title: 'Administration', icon: Users}] : []),
+    ...(role === 'employee' ? [{href: '/dashboard/employee', title: 'Assigned claims', icon: ClipboardList}] : []),
     {href: '/search', title: 'Advanced search', icon: Search},
     {href: '/search?scope=review', title: 'Search review cases', icon: Search, hidden: !['reviewer', 'admin'].includes(role)},
     {href: '/reports', title: 'Reports', icon: FileText},
@@ -328,11 +331,13 @@ function DashboardApp() {
   useEffect(() => {onExpired(() => {client.clear();setUser(null);navigate('/');});return () => onExpired(() => {});}, [client,navigate]);
   async function signOut() {try {await api.post('/auth/logout');} catch {/* Session still cleared locally. */}setSession(null);setUser(null);client.clear();navigate('/');}
   if (!user) return <Login onLogin={setUser}/>;
-  const home = user.role === 'admin' ? '/admin' : user.role === 'reviewer' ? '/reviewer' : user.role === 'employee' ? '/notifications' : '/customer';
+  const home = user.role === 'admin' ? '/admin' : user.role === 'reviewer' ? '/reviewer' : user.role === 'employee' ? '/employee' : '/customer';
   return <Shell user={user} signOut={signOut}><Routes>
-    <Route path="/customer" element={['customer','admin'].includes(user.role) ? <Customer adminView={user.role === 'admin'}/> : <Navigate to={home} replace/>}/>
-    <Route path="/reviewer" element={['reviewer','admin'].includes(user.role) ? <Reviewer role={user.role}/> : <Navigate to={home} replace/>}/>
-    <Route path="/admin" element={user.role === 'admin' ? <Admin/> : <Navigate to={home} replace/>}/>
+    <Route path="/customer" element={['customer','admin'].includes(user.role) ? <Customer adminView={user.role === 'admin'}/> : <AccessDenied role={user.role}/>}/>
+    <Route path="/reviewer" element={['reviewer','admin'].includes(user.role) ? <Reviewer role={user.role}/> : <AccessDenied role={user.role}/>}/>
+    <Route path="/admin" element={user.role === 'admin' ? <Admin/> : <AccessDenied role={user.role}/>}/>
+    <Route path="/employee" element={['employee','admin'].includes(user.role) ? <StaffWorkspace/> : <AccessDenied role={user.role}/>}/>
+    <Route path="/operations" element={user.role === 'admin' ? <StaffWorkspace admin/> : <AccessDenied role={user.role}/>}/>
     <Route path="/notifications" element={<NotificationCenter role={user.role}/>}/>
     <Route path="*" element={<Navigate to={home} replace/>}/></Routes></Shell>;
 }

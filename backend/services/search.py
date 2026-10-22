@@ -6,7 +6,7 @@ from sqlalchemy import and_, or_, select, func, case, false
 from sqlalchemy.orm import aliased
 from backend.db.models import Claim, Product, Warranty, User, PythonPrediction, Review
 from backend.extensions import db
-from backend.api.search_schemas import date_bounds
+from backend.schemas.search import date_bounds
 from .warranty_calculations import current_date
 
 CLAIM_FILTERS = {'claim_id', 'claim_status', 'min_confidence', 'max_confidence',
@@ -14,19 +14,8 @@ CLAIM_FILTERS = {'claim_id', 'claim_status', 'min_confidence', 'max_confidence',
 
 
 def claim_access(user, *, reviewable=True):
-    if user.role == 'admin':
-        return True
-    if user.role == 'customer':
-        return Claim.user_id == user.id
-    if user.role == 'employee':
-        return Claim.assigned_employee_id == user.id
-    if user.role == 'reviewer':
-        assigned = Claim.assigned_reviewer_id == user.id
-        if reviewable:
-            return or_(assigned, and_(Claim.assigned_reviewer_id.is_(None),
-                Claim.status == 'manual_review', Claim.manual_review_required.is_(True)))
-        return assigned
-    return false()
+    from .access import claim_scope
+    return claim_scope(user)
 
 
 def product_access(user):

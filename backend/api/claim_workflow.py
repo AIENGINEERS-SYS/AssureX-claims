@@ -64,8 +64,8 @@ def upload():
         from backend.services.document_errors import document_error
         raise document_error("unsupported_document", "Upload exactly one document per request.")
     claim = owned_claim(data["draft_id"])
-    from .documents import upload_to_claim
-    document = upload_to_claim(claim, data, request.files["file"])
+    from backend.services.document_uploads import upload_to_claim
+    document = upload_to_claim(claim, data, request.files["file"], actor=current_user)
     return {"document": document_json(document), "claim": workflow_json(claim)}, 201
 
 
@@ -122,6 +122,8 @@ def submit():
     claim.current_step = 4
     audit("claim.submit", claim, new={"claim_id": claim.claim_id, "status": "SUBMITTED"}, claim_id=claim.id)
     NotificationService().send_claim_submitted(claim)
+    from backend.services.assessments import enqueue
+    enqueue(claim, actor=current_user)
     db.session.commit()
     return {"claim": workflow_json(claim)}, 201
 
