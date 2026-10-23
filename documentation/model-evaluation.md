@@ -29,11 +29,11 @@ Internal labels are `valid`, `invalid`, and `manual_review`. Both adapters rejec
 missing classes, and distributions that do not sum to approximately one. The Python adapter builds the exact
 feature frame declared by the model bundle. The GTM adapter uses a private 224x224 claim evidence card.
 
-Production Python deployments should use Python 3.11 or 3.12 and install `backend/requirements.txt`. Phase 30
-preloads the Python and GTM artifacts once per serving worker during application startup, then reuses the
-in-memory models across requests. Development remains lazy by default so ordinary local commands do not pay
-TensorFlow startup cost. Model cache keys include the artifact version, so a replaced model is loaded as a new
-cache entry.
+Production Python deployments should use Python 3.11 or 3.12 and install `backend/requirements.txt`.
+Install the isolated GTM runtime with `npm ci --prefix gtm_model`. GTM runs in a persistent Node child process;
+the Python backend and Tesseract OCR do not import TensorFlow. Production preloads both adapters at startup.
+Development remains lazy by default. Set `GTM_NODE_EXECUTABLE` if Node is not on PATH and
+`GTM_WORKER_TIMEOUT_SECONDS` to change the worker response timeout (default 60 seconds).
 
 ## Comparison thresholds
 
@@ -59,9 +59,9 @@ The normal warm prediction path targets approximately **5 seconds or less** for 
 
 Implemented optimizations include:
 
-- Python and GTM model objects are cached in process memory.
+- The Python model is cached in the API process; the GTM model stays loaded in its Node worker.
 - Production serving workers preload both models at startup by default.
-- Railway migration commands explicitly disable preloading so TensorFlow is not loaded just to apply migrations.
+- Railway migration commands explicitly disable preloading so neither model is loaded just to apply migrations.
 - GTM metadata labels are cached by artifact version.
 - Deterministic Claim Summary Cards are reused when the rendered evidence digest has not changed.
 - Claim loading joins the scalar product/warranty relationships and select-loads document/repair collections, reducing query round trips.

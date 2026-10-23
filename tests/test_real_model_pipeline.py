@@ -241,9 +241,6 @@ def test_gtm_accuracy_on_30_shared_unseen_claims(app, tmp_path):
     real GTM artifact.
     """
     import csv
-    import numpy as np
-    from PIL import Image
-
     from backend.services.model_comparison import ModelComparisonService
     from backend.services.predictions import (
         _artifact_version,
@@ -284,15 +281,14 @@ def test_gtm_accuracy_on_30_shared_unseen_claims(app, tmp_path):
         actual_label = dataset_label(row[label_column])
         assert actual_label == dataset_label(python_row["claim_class"])
         card = render_claim_card(payload(row, index), tmp_path / f"{python_row['claim_id']}.png")
-        with Image.open(card) as image:
-            array = np.asarray(image.convert("RGB"), dtype="float32")
-        images.append((array / 127.5) - 1.0)
+        images.append(card)
         actual.append(actual_label)
         ordered_rows.append((python_row, row))
 
     version = _artifact_version(gtm_path)
-    gtm_model = _load_gtm(str(gtm_path.resolve()), version)
-    raw_predictions = gtm_model.predict(np.stack(images, axis=0), verbose=0)
+    with app.app_context():
+        gtm_model = _load_gtm(str(gtm_path.resolve()), version)
+    raw_predictions = [gtm_model.predict(card) for card in images]
     labels = _gtm_labels(gtm_path)
     assert len(raw_predictions) == 30
 
