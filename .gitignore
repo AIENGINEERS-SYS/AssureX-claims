@@ -65,6 +65,10 @@ db.sqlite3-journal
 instance/
 .webassets-cache
 
+# Reproducible GTM training outputs
+dataset_generator/gtm_dataset/
+gtm_model/candidate/
+
 # Scrapy stuff:
 .scrapy
 

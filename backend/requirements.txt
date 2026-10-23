@@ -22,9 +22,7 @@ numpy>=1.26,<2
 pandas>=2.2,<3
 scikit-learn==1.8.0
 xgboost>=3.0,<4
-# GTM inference is loaded lazily so non-inference workers still start cleanly.
-tensorflow==2.17.0; python_version < "3.13"
-tensorflowjs==4.22.0; python_version < "3.13"
+# GTM runs in the separate Node worker under gtm_model/.
 gunicorn>=23.0.0
 openpyxl>=3.1.5,<4
 reportlab>=4.4,<5

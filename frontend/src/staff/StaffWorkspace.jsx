@@ -19,6 +19,8 @@ export default function StaffWorkspace({admin = false}) {
     catch (err) {setError(errorMessage(err));} finally {setBusy(false);}
   }
   const claim = details.data?.claim;
+  const evaluation = details.data?.evaluation;
+  const score = value => value == null ? 'Unavailable' : `${(value * 100).toFixed(1)}%`;
   return <div className={`staff-workspace${admin ? ' admin-operations' : ''}`}><div className="page-head"><div><h1>{admin ? 'Claim and account administration' : 'Assigned claims'}</h1>
     <p>{admin ? 'Manage assignments, employee accounts and failed assessment jobs.' : 'Inspect evidence, request information and run permitted assessments.'}</p></div></div>
     {error && <p className="error-box" role="alert">{error}</p>}
@@ -34,6 +36,12 @@ export default function StaffWorkspace({admin = false}) {
       {claim ? <><h3>{claim.claim_id}</h3><p>{claim.fault_description}</p><p>Status: {claim.status.replaceAll('_',' ')}</p>
         <p>Assessment: {details.data.assessment.assessment_status} · Report: {details.data.assessment.report_status}</p>
         {details.data.evaluation && <p>Automated recommendation: {details.data.evaluation.recommendation.replaceAll('_',' ')}. An authorized reviewer records the final decision.</p>}
+        {evaluation && <section aria-label="Model scores"><h3>Model scores</h3>
+          {['python', 'gtm'].map(kind => {const result = evaluation[`${kind}_prediction`]; return <p key={kind}>
+            {kind === 'python' ? 'XGBoost' : 'GTM'}: {result ? `${result.prediction_class.replaceAll('_', ' ')} — ${score(result.top_confidence)}` : `Unavailable${evaluation.model_errors?.[kind] ? ` (${evaluation.model_errors[kind]})` : ''}`}
+          </p>;})}
+          {evaluation.status !== 'complete' && <p>Assessment {evaluation.status}; a missing model score has not been treated as zero.</p>}
+        </section>}
         <h3>Evidence</h3><ul>{details.data.documents.map(item => <li key={item.id}>{item.file_name} · {item.ocr_status} · {item.review_status}
           <button disabled={busy} onClick={() => act(async () => {const response = await api.get(`/documents/${item.id}/content`, {responseType: 'blob'});
             const url = URL.createObjectURL(response.data), link = document.createElement('a'); link.href = url; link.download = item.file_name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);

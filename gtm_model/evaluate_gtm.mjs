@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
-import * as tf from "@tensorflow/tfjs-node";
+import { loadModel, imageTensor } from "./runtime.mjs";
 
 const CANONICAL_CLASSES = ["valid", "invalid", "manual_review"];
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg"]);
@@ -106,12 +105,7 @@ function confusionTemplate() {
 }
 
 async function loadImageTensor(imagePath, imageSize) {
-  const bytes = fs.readFileSync(imagePath);
-  return tf.tidy(() => {
-    const decoded = tf.node.decodeImage(bytes, 3);
-    const resized = tf.image.resizeBilinear(decoded, [imageSize, imageSize], true);
-    return resized.toFloat().div(127.5).sub(1).expandDims(0);
-  });
+  return imageTensor(imagePath, imageSize);
 }
 
 async function main() {
@@ -142,7 +136,7 @@ async function main() {
   }
 
   const imageSize = Number(metadata.imageSize) || 224;
-  const model = await tf.loadLayersModel(pathToFileURL(modelPath).href);
+  const model = await loadModel(modelPath);
 
   const confusion = confusionTemplate();
   const predictions = [];

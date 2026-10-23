@@ -182,12 +182,12 @@ class PythonPredictionService:
             raise PredictionError("Python inference failed.") from exc
 
 
-@lru_cache(maxsize=2)
 def _load_gtm(path, artifact_version):
-    """Load one GTM artifact per worker process and reuse it across requests."""
+    """Start an isolated Node worker, cached per artifact version."""
     try:
-        import tensorflowjs as tfjs
-        return tfjs.converters.load_keras_model(path)
+        from .gtm_worker import worker
+        return worker(current_app.config["GTM_NODE_EXECUTABLE"], path, artifact_version,
+                      current_app.config["GTM_WORKER_TIMEOUT_SECONDS"])
     except Exception as exc:
         raise PredictionError("GTM runtime or model could not be loaded.") from exc
 
@@ -277,12 +277,7 @@ class GTMPredictionService:
             if predictor:
                 raw = predictor(str(card))
             else:
-                import numpy as np
-                from PIL import Image
-                with Image.open(card) as source:
-                    image = np.asarray(source.convert("RGB"), dtype="float32")
-                image = ((image / 127.5) - 1.0)[None, ...]
-                raw = _load_gtm(str(model_path.resolve()), version).predict(image, verbose=0)[0]
+                raw = _load_gtm(str(model_path.resolve()), version).predict(card)
             duration = round((time.perf_counter() - started) * 1000)
             labels = _gtm_labels(model_path, version)
             if isinstance(raw, dict):

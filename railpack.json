@@ -2,7 +2,13 @@
   "$schema": "https://schema.railpack.com",
   "provider": "python",
   "packages": {
-    "python": "3.11"
+    "python": "3.11",
+    "node": "22"
+  },
+  "steps": {
+    "build": {
+      "commands": ["...", "npm ci --prefix gtm_model"]
+    }
   },
   "deploy": {
     "aptPackages": [
